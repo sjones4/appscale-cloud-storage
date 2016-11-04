@@ -6,6 +6,7 @@ from appscale.cloud_storage import buckets
 from appscale.cloud_storage import oauth
 from appscale.cloud_storage import objects
 from appscale.cloud_storage import utils
+from appscale.cloud_storage.xml import objects as xml_objects
 from flask import Flask
 from riak import RiakClient
 
@@ -55,3 +56,13 @@ app.add_url_rule('/upload/storage/v1/b/<bucket_name>/o',
 # Access Tokens
 app.add_url_rule('/o/oauth2/token',
                  view_func=oauth.get_token, methods=['POST'])
+
+# XML API
+app.add_url_rule('/<bucket_name>/<path:object_name>',
+                 view_func=xml_objects.post_object, methods=['POST'])
+app.add_url_rule('/<bucket_name>/<path:object_name>',
+                 view_func=xml_objects.put_object, methods=['PUT'])
+app.add_url_rule('/<bucket_name>/<path:object_name>',
+                 view_func=xml_objects.download_object, methods=['GET'])
+app.add_url_rule('/<bucket_name>/<path:object_name>',
+                 view_func=xml_objects.remove_object, methods=['DELETE'])
