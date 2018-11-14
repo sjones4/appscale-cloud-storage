@@ -69,6 +69,31 @@ def error(message, code=HTTP_ERROR):
     return Response(response, mimetype='application/json', status=code)
 
 
+def xml_error(code, message, details='', http_code=HTTP_ERROR):
+    """ A convenience function for formatting XML error messages.
+
+    Args:
+        code: A string describing the error code.
+        message: A string containing the error message.
+        details: Additional details about the error.
+        http_code: An integer containing an HTTP status code.
+    Returns:
+        A Flask response specifying the error.
+    """
+    if details:
+        details = '<Details>{}</Details>'.format(details)
+
+    xml_str = """
+    <?xml version='1.0' encoding='UTF-8'?>
+    <Error>
+      <Code>{code}</Code>
+      <Message>{message}</Message>
+      {details}
+    </Error>
+    """.strip().format(code=code, message=message, details=details)
+    return Response(xml_str, mimetype='application/xml', status=http_code)
+
+
 def index_bucket(bucket_name, project):
     """ Associates a bucket with a project.
 
