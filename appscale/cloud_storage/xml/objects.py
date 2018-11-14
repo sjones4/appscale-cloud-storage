@@ -52,7 +52,7 @@ def get_connection():
     return s3_connection_cache[user]
 
 
-def download_object(bucket_name, object_name):
+def download_object(bucket_name, object_name, **kwargs):
     current_app.logger.debug('headers: {}'.format(request.headers))
 
     unsupported_headers = ('If-Match', 'If-Modified-Since', 'If-None-Match',
@@ -108,7 +108,7 @@ def download_object(bucket_name, object_name):
     return response
 
 
-def remove_object(bucket_name, object_name):
+def remove_object(bucket_name, object_name, **kwargs):
     """ Deletes an object and its metadata.
 
     Args:
@@ -134,7 +134,7 @@ def remove_object(bucket_name, object_name):
     return '', HTTP_NO_CONTENT
 
 
-def post_object(bucket_name, object_name):
+def post_object(bucket_name, object_name, **kwargs):
     current_app.logger.debug('headers: {}'.format(request.headers))
 
     # TODO: Handle Content-Type header.
@@ -158,7 +158,7 @@ def post_object(bucket_name, object_name):
     return '', HTTP_NOT_IMPLEMENTED
 
 
-def put_object(bucket_name, object_name):
+def put_object(bucket_name, object_name, **kwargs):
     current_app.logger.debug('headers: {}'.format(request.headers))
 
     conn = get_connection()

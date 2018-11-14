@@ -59,10 +59,10 @@ app.add_url_rule('/o/oauth2/token',
 
 # XML API
 app.add_url_rule('/<bucket_name>/<path:object_name>',
-                 view_func=xml_objects.post_object, methods=['POST'])
+                 view_func=xml_objects.post_object, methods=['POST'], subdomain='<subdomain>')
 app.add_url_rule('/<bucket_name>/<path:object_name>',
-                 view_func=xml_objects.put_object, methods=['PUT'])
+                 view_func=xml_objects.put_object, methods=['PUT'], subdomain='<subdomain>')
 app.add_url_rule('/<bucket_name>/<path:object_name>',
-                 view_func=xml_objects.download_object, methods=['GET'])
+                 view_func=xml_objects.download_object, methods=['GET'], subdomain='<subdomain>')
 app.add_url_rule('/<bucket_name>/<path:object_name>',
-                 view_func=xml_objects.remove_object, methods=['DELETE'])
+                 view_func=xml_objects.remove_object, methods=['DELETE'], subdomain='<subdomain>')
