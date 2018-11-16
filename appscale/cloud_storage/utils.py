@@ -8,6 +8,7 @@ import re
 from boto.s3.multipart import MultiPartUpload
 from flask import Response
 from riak.riak_object import RiakObject
+from xml.etree import ElementTree as ETree
 from .constants import HTTP_ERROR
 
 # A cache used to store valid access tokens.
@@ -80,18 +81,46 @@ def xml_error(code, message, details='', http_code=HTTP_ERROR):
     Returns:
         A Flask response specifying the error.
     """
+    error = {'Code': code, 'Message': message}
     if details:
-        details = '<Details>{}</Details>'.format(details)
+        error['Details'] = details
+    return Response(object_as_xml(error, 'Error'), mimetype='application/xml', status=http_code)
 
-    xml_str = """
-    <?xml version='1.0' encoding='UTF-8'?>
-    <Error>
-      <Code>{code}</Code>
-      <Message>{message}</Message>
-      {details}
-    </Error>
-    """.strip().format(code=code, message=message, details=details)
-    return Response(xml_str, mimetype='application/xml', status=http_code)
+
+def object_as_xml(object, element, namespace=None):
+    """ Utility function for converting a dict to an xml string.
+
+    Args:
+        object: The dict to be converted to xml.
+        element: The name of the xml document element.
+        namespace: Optional default namespace for the document.
+    Returns:
+        A textual representation of the object as xml.
+    """
+    om = ETree.Element(element)
+    if namespace:
+        om.set('xmlns', namespace)
+    _object_as_om(om, object)
+    return ETree.tostring(om, encoding='utf8')
+
+
+def _object_as_om(om, object):
+    """ Internals for object to model conversion"""
+    for key in object:
+        value = object.get(key)
+        if isinstance(value, dict):
+            sub_element = ETree.SubElement(om, key)
+            _object_as_om(sub_element, value)
+        elif isinstance(value, list):
+            for sub_value in value:
+                sub_element = ETree.SubElement(om, key)
+                if isinstance(sub_value, dict):
+                    _object_as_om(sub_element, sub_value)
+                else:
+                    sub_element.text = str(sub_value)
+        else:
+            sub_element = ETree.SubElement(om, key)
+            sub_element.text = str(value)
 
 
 def index_bucket(bucket_name, project):

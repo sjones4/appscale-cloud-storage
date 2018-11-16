@@ -6,6 +6,7 @@ from appscale.cloud_storage import buckets
 from appscale.cloud_storage import oauth
 from appscale.cloud_storage import objects
 from appscale.cloud_storage import utils
+from appscale.cloud_storage.xml import buckets as xml_buckets
 from appscale.cloud_storage.xml import objects as xml_objects
 from flask import Flask
 from riak import RiakClient
@@ -30,6 +31,15 @@ utils.admin_connection = S3Connection(
 utils.riak_connection = RiakClient(nodes=app.config['RIAK_KV_NODES'])
 utils.config = app.config
 
+#
+# Access Tokens
+#
+app.add_url_rule('/o/oauth2/token',
+                 view_func=oauth.get_token, methods=['POST'], subdomain='<subdomain>')
+
+#
+# JSON API
+#
 
 # Buckets
 app.add_url_rule('/storage/v1/b',
@@ -52,17 +62,24 @@ app.add_url_rule('/upload/storage/v1/b/<bucket_name>/o',
                  view_func=objects.insert_object, methods=['POST'], subdomain='<subdomain>')
 app.add_url_rule('/upload/storage/v1/b/<bucket_name>/o',
                  view_func=objects.resumable_insert, methods=['PUT'], subdomain='<subdomain>')
-
-# Access Tokens
-app.add_url_rule('/o/oauth2/token',
-                 view_func=oauth.get_token, methods=['POST'], subdomain='<subdomain>')
-
+#
 # XML API
-app.add_url_rule('/<bucket_name>/<path:object_name>',
+#
+
+# Buckets
+app.add_url_rule('/<bucket_name>', endpoint='xml_bucket_put',
+                 view_func=xml_buckets.create_bucket, methods=['PUT'], subdomain='<subdomain>')
+app.add_url_rule('/<bucket_name>', endpoint='xml_bucket_delete',
+                 view_func=xml_buckets.delete_bucket, methods=['DELETE'], subdomain='<subdomain>')
+
+# Objects
+app.add_url_rule('/<bucket_name>', endpoint='xml_object_list',
+                 view_func=xml_objects.list_objects, methods=['GET'], subdomain='<subdomain>')
+app.add_url_rule('/<bucket_name>/<path:object_name>', endpoint='xml_object_post',
                  view_func=xml_objects.post_object, methods=['POST'], subdomain='<subdomain>')
-app.add_url_rule('/<bucket_name>/<path:object_name>',
+app.add_url_rule('/<bucket_name>/<path:object_name>', endpoint='xml_object_put',
                  view_func=xml_objects.put_object, methods=['PUT'], subdomain='<subdomain>')
-app.add_url_rule('/<bucket_name>/<path:object_name>',
+app.add_url_rule('/<bucket_name>/<path:object_name>', endpoint='xml_object_get',
                  view_func=xml_objects.download_object, methods=['GET'], subdomain='<subdomain>')
-app.add_url_rule('/<bucket_name>/<path:object_name>',
+app.add_url_rule('/<bucket_name>/<path:object_name>', endpoint='xml_object_delete',
                  view_func=xml_objects.remove_object, methods=['DELETE'], subdomain='<subdomain>')

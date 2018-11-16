@@ -3,23 +3,24 @@ import binascii
 import dateutil.parser
 import math
 import random
-
 from boto.exception import S3ResponseError
-from boto.s3.connection import OrdinaryCallingFormat
-from boto.s3.connection import S3Connection
 from boto.s3.key import Key
+from flask import Response
 from flask import current_app
 from flask import request
-from flask import Response
 from io import BytesIO
+
+from .decorators import authenticate_xml
 from ..constants import HTTP_BAD_REQUEST
 from ..constants import HTTP_CREATED
-from ..constants import HTTP_NO_CONTENT
 from ..constants import HTTP_NOT_FOUND
 from ..constants import HTTP_NOT_IMPLEMENTED
+from ..constants import HTTP_NO_CONTENT
 from ..constants import HTTP_RANGE_NOT_SATISFIABLE
 from ..constants import HTTP_RESUME_INCOMPLETE
 from ..objects import read_object
+from ..utils import UploadNotFound
+from ..utils import UploadStates
 from ..utils import calculate_md5
 from ..utils import completed_bytes
 from ..utils import delete_object_metadata
@@ -28,31 +29,45 @@ from ..utils import get_completed_ranges
 from ..utils import get_object_metadata
 from ..utils import get_request_from_state
 from ..utils import get_upload_state
-from ..utils import UploadNotFound
-from ..utils import UploadStates
-from ..utils import upsert_upload_state
-from ..utils import s3_connection_cache
+from ..utils import object_as_xml
 from ..utils import set_object_metadata
+from ..utils import upsert_upload_state
 from ..utils import xml_error
 
 
-# TODO: Implement authetication.
-def get_connection():
-    user = 'appengine_user'
-    creds = current_app.config['S3_ADMIN_CREDS']
-    if user not in s3_connection_cache:
-        s3_connection_cache[user] = S3Connection(
-            aws_access_key_id=creds['access_key'],
-            aws_secret_access_key=creds['secret_key'],
-            is_secure=current_app.config['S3_USE_SSL'],
-            host=current_app.config['S3_HOST'],
-            port=current_app.config['S3_PORT'],
-            calling_format=OrdinaryCallingFormat()
-        )
-    return s3_connection_cache[user]
+RESPONSE_NS = 'http://doc.s3.amazonaws.com/2006-03-01'
 
 
-def download_object(bucket_name, object_name, **kwargs):
+def key_as_content(key):
+    return {'Key': key.name, 'LastModified': key.last_modified, 'ETag': key.etag, 'Size': key.size}
+
+
+@authenticate_xml
+def list_objects(conn, bucket_name, **kwargs):
+    current_app.logger.debug('headers: {}'.format(request.headers))
+    """ Retrieves a list of objects.
+
+    Args:
+        conn: An S3Connection instance.
+        bucket_name: A string specifying a bucket name.
+    Returns:
+        An XML string representing an object listing.
+    """
+    try:
+        bucket = conn.get_bucket(bucket_name)
+    except S3ResponseError as s3_error:
+        if s3_error.status == HTTP_NOT_FOUND:
+            return xml_error('NoSuchBucket', 'The specified bucket does not exist.', HTTP_NOT_FOUND)
+        raise s3_error
+
+    response = {'Name': bucket_name, 'IsTruncated': 'false'}
+    response['Contents'] = [key_as_content(key) for key in bucket.list()]
+
+    return Response(object_as_xml(response, 'ListBucketResult', RESPONSE_NS), mimetype='application/xml')
+
+
+@authenticate_xml
+def download_object(conn, bucket_name, object_name, **kwargs):
     current_app.logger.debug('headers: {}'.format(request.headers))
 
     unsupported_headers = ('If-Match', 'If-Modified-Since', 'If-None-Match',
@@ -65,8 +80,6 @@ def download_object(bucket_name, object_name, **kwargs):
     boto_headers = None
     if 'Range' in request.headers:
         boto_headers = {'Range': request.headers['Range']}
-
-    conn = get_connection()
 
     try:
         bucket = conn.get_bucket(bucket_name)
@@ -91,10 +104,14 @@ def download_object(bucket_name, object_name, **kwargs):
                 http_code=HTTP_RANGE_NOT_SATISFIABLE)
         raise s3_error
 
+    headers = dict(key.resp.getheaders())
+    current_app.logger.debug('s3 inbound headers: {}'.format(headers))
     response = Response(read_object(key, current_app.config['READ_SIZE']))
     response.headers['Content-Type'] = key.content_type
     response.headers['Last-Modified'] = key.last_modified
     response.headers['x-goog-stored-content-length'] = key.size
+    if 'Content-Length' in headers:
+      response.headers['Content-Length'] = headers['Content-Length']
 
     # Multipart uploads do not have MD5 metadata by default.
     if key.md5 is not None:
@@ -108,15 +125,14 @@ def download_object(bucket_name, object_name, **kwargs):
     return response
 
 
-def remove_object(bucket_name, object_name, **kwargs):
+@authenticate_xml
+def remove_object(conn, bucket_name, object_name, **kwargs):
     """ Deletes an object and its metadata.
 
     Args:
         bucket_name: A string specifying a bucket name.
         object_name: A string specifying an object name.
     """
-    conn = get_connection()
-
     try:
         bucket = conn.get_bucket(bucket_name)
     except S3ResponseError as s3_error:
@@ -134,7 +150,8 @@ def remove_object(bucket_name, object_name, **kwargs):
     return '', HTTP_NO_CONTENT
 
 
-def post_object(bucket_name, object_name, **kwargs):
+@authenticate_xml
+def post_object(conn, bucket_name, object_name, **kwargs):
     current_app.logger.debug('headers: {}'.format(request.headers))
 
     # TODO: Handle Content-Type header.
@@ -158,10 +175,9 @@ def post_object(bucket_name, object_name, **kwargs):
     return '', HTTP_NOT_IMPLEMENTED
 
 
-def put_object(bucket_name, object_name, **kwargs):
+@authenticate_xml
+def put_object(conn, bucket_name, object_name, **kwargs):
     current_app.logger.debug('headers: {}'.format(request.headers))
-
-    conn = get_connection()
 
     if 'X-Goog-Copy-Source' in request.headers:
         source = request.headers['X-Goog-Copy-Source']
