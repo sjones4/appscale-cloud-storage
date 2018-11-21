@@ -67,13 +67,13 @@ app.add_url_rule('/upload/storage/v1/b/<bucket_name>/o',
 #
 
 # Buckets
-app.add_url_rule('/<bucket_name>', endpoint='xml_bucket_put',
+app.add_url_rule('/<bucket_name>', strict_slashes=False, endpoint='xml_bucket_put',
                  view_func=xml_buckets.create_bucket, methods=['PUT'], subdomain='<subdomain>')
-app.add_url_rule('/<bucket_name>', endpoint='xml_bucket_delete',
+app.add_url_rule('/<bucket_name>', strict_slashes=False, endpoint='xml_bucket_delete',
                  view_func=xml_buckets.delete_bucket, methods=['DELETE'], subdomain='<subdomain>')
 
 # Objects
-app.add_url_rule('/<bucket_name>', endpoint='xml_object_list',
+app.add_url_rule('/<bucket_name>', strict_slashes=False, endpoint='xml_object_list',
                  view_func=xml_objects.list_objects, methods=['GET'], subdomain='<subdomain>')
 app.add_url_rule('/<bucket_name>/<path:object_name>', endpoint='xml_object_post',
                  view_func=xml_objects.post_object, methods=['POST'], subdomain='<subdomain>')
