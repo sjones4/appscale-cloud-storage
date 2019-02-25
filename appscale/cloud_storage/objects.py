@@ -270,9 +270,10 @@ def insert_object(bucket_name, upload_type, conn, **kwargs):
         state = {'object': object_name, 'status': UploadStates.NEW}
         upsert_upload_state(new_upload_id, state)
 
-        upload_url = url_for('insert_object', bucket_name=bucket_name, _external=False, **kwargs)
-        redirect = request.url_root[:-1] + upload_url + \
-                   '?uploadType=resumable&upload_id={}'.format(new_upload_id)
+        upload_url = url_for('insert_object', bucket_name=bucket_name,
+                             _external=False, **kwargs)
+        redirect = (request.url_root[:-1] + upload_url +
+                    '?uploadType=resumable&upload_id={}'.format(new_upload_id))
         response = Response('')
         response.headers['Location'] = redirect
         return response
@@ -396,3 +397,32 @@ def resumable_insert(bucket_name, upload_id, conn, **kwargs):
                      for start, end in completed_ranges]
     response.headers['Range'] = 'bytes=' + ','.join(range_strings)
     return response
+
+
+@authenticate
+@assert_unsupported('destinationPredefinedAcl', 'ifGenerationMatch',
+                    'ifGenerationNotMatch', 'ifMetagenerationMatch',
+                    'ifMetagenerationNotMatch', 'ifSourceGenerationMatch',
+                    'ifSourceGenerationNotMatch',
+                    'ifSourceMetagenerationMatch',
+                    'ifSourceMetagenerationNotMatch', 'sourceGeneration')
+def copy_object(bucket_name, object_name, dest_bucket_name, dest_object_name,
+                conn, **kwargs):
+    """ Copies an object.
+
+    Args:
+        bucket_name: A string specifying the source bucket name.
+        object_name: A string specifying the source object name.
+        dest_bucket_name: A string specifying the destination bucket name.
+        dest_object_name: A string specifying the destination object name.
+        conn: An S3Connection instance.
+    Returns:
+        A JSON string representing an object.
+    """
+    dest_bucket = conn.get_bucket(dest_bucket_name)
+    dest_key = dest_bucket.copy_key(dest_object_name, bucket_name, object_name)
+    dest_key = dest_bucket.get_key(dest_key.name)  # retrieve metadata for key
+    dest_obj = object_info(
+        dest_key, last_modified=datetime.datetime.now(datetime.timezone.utc),
+        **kwargs)
+    return Response(json.dumps(dest_obj), mimetype='application/json')
