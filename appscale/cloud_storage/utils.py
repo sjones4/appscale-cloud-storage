@@ -2,6 +2,7 @@ import datetime
 import hashlib
 import itertools
 import json
+import psycopg2
 import re
 
 from boto.s3.multipart import MultiPartUpload
@@ -14,8 +15,8 @@ active_tokens = {}
 # A cache used to store active S3 connections.
 s3_connection_cache = {}
 
-# A psycopg2 connection.
-pg_connection = None
+# A PostgresConnector
+pg_connector = None
 
 # This configuration is defined when the app starts.
 config = None
@@ -41,6 +42,21 @@ class UploadStates(object):
     NEW = 'new'
     IN_PROGRESS = 'in_progress'
     COMPLETE = 'complete'
+
+
+class PostgresConnector(object):
+    """ Connection helper for postgresql"""
+    def __init__(self, *args, **kwargs):
+        self._args = args
+        self._kwargs = kwargs
+        self._connection = None
+
+    def connect(self):
+        self._connection = psycopg2.connect(*self._args, **self._kwargs)
+        return self._connection
+
+    def close(self):
+        return self._connection.close()
 
 
 def camel_to_snake(name):
@@ -74,11 +90,10 @@ def index_bucket(bucket_name, project):
         bucket_name: A string containing the bucket name.
         project: A string containing the project ID.
     """
-    with pg_connection.cursor() as cur:
-        cur.execute('INSERT INTO buckets (project, bucket) VALUES (%s, %s)',
-                    (project, bucket_name))
-
-    pg_connection.commit()
+    with pg_connector.connect() as pg_connection:
+        with pg_connection.cursor() as cur:
+            cur.execute('INSERT INTO buckets (project, bucket) VALUES (%s, %s)',
+                        (project, bucket_name))
 
 
 def query_buckets(project):
@@ -89,12 +104,13 @@ def query_buckets(project):
     Returns:
         A set of strings containing bucket names.
     """
-    with pg_connection.cursor() as cur:
-        cur.execute('SELECT bucket FROM buckets WHERE project = %s',
-                    (project,))
-        buckets = {result[0] for result in cur.fetchall()}
+    with pg_connector.connect() as pg_connection:
+        with pg_connection.cursor() as cur:
+            cur.execute('SELECT bucket FROM buckets WHERE project = %s',
+                        (project,))
+            buckets = {result[0] for result in cur.fetchall()}
 
-    pg_connection.rollback()
+        pg_connection.rollback()
     return buckets
 
 
@@ -107,12 +123,11 @@ def set_token(token, user_id, expiration):
         expiration: A datetime object specifying the token expiration.
     """
     # TODO: Clean up expired tokens.
-    with pg_connection.cursor() as cur:
-        cur.execute('INSERT INTO tokens (token, user_id, expiration) '
-                    'VALUES (%s, %s, %s)',
-                    (token, user_id, expiration))
-
-    pg_connection.commit()
+    with pg_connector.connect() as pg_connection:
+        with pg_connection.cursor() as cur:
+            cur.execute('INSERT INTO tokens (token, user_id, expiration) '
+                        'VALUES (%s, %s, %s)',
+                        (token, user_id, expiration))
 
 
 def get_user(token):
@@ -131,12 +146,13 @@ def get_user(token):
         raise TokenExpired('Token expired.')
 
     # Try to fetch the token from Postgres.
-    with pg_connection.cursor() as cur:
-        cur.execute('SELECT user_id, expiration FROM tokens WHERE token = %s',
-                    (token,))
-        result = cur.fetchone()
+    with pg_connector.connect() as pg_connection:
+        with pg_connection.cursor() as cur:
+            cur.execute('SELECT user_id, expiration FROM tokens WHERE token = %s',
+                        (token,))
+            result = cur.fetchone()
 
-    pg_connection.rollback()
+        pg_connection.rollback()
 
     if result is None:
         raise TokenNotFound('Token not found.')
@@ -156,20 +172,19 @@ def upsert_upload_state(upload_id, state):
         upload_id: A string specifying the upload ID.
         state: A dictionary containing the upload state.
     """
-    with pg_connection.cursor() as cur:
-        cur.execute('SELECT state FROM uploads WHERE id = %s', (upload_id,))
-        result = cur.fetchone()
-        if result is None:
-            new_state = state
-        else:
-            new_state = json.loads(result[0])
-            new_state.update(state)
+    with pg_connector.connect() as pg_connection:
+        with pg_connection.cursor() as cur:
+            cur.execute('SELECT state FROM uploads WHERE id = %s', (upload_id,))
+            result = cur.fetchone()
+            if result is None:
+                new_state = state
+            else:
+                new_state = json.loads(result[0])
+                new_state.update(state)
 
-        cur.execute('INSERT INTO uploads (id, state) VALUES (%s, %s) '
-                    'ON CONFLICT (id) DO UPDATE SET state = EXCLUDED.state',
-                    (upload_id, json.dumps(new_state)))
-
-    pg_connection.commit()
+            cur.execute('INSERT INTO uploads (id, state) VALUES (%s, %s) '
+                        'ON CONFLICT (id) DO UPDATE SET state = EXCLUDED.state',
+                        (upload_id, json.dumps(new_state)))
 
 
 def get_upload_state(upload_id):
@@ -180,11 +195,12 @@ def get_upload_state(upload_id):
     Returns:
         A dictionary containing the upload state.
     """
-    with pg_connection.cursor() as cur:
-        cur.execute('SELECT state FROM uploads WHERE id = %s', (upload_id,))
-        result = cur.fetchone()
+    with pg_connector.connect() as pg_connection:
+        with pg_connection.cursor() as cur:
+            cur.execute('SELECT state FROM uploads WHERE id = %s', (upload_id,))
+            result = cur.fetchone()
 
-    pg_connection.rollback()
+        pg_connection.rollback()
 
     if result is None:
         raise UploadNotFound('Invalid upload_id.')
@@ -279,14 +295,13 @@ def set_object_metadata(key, data):
     """
     bucket_name = key.bucket.name
     object_name = key.name
-    with pg_connection.cursor() as cur:
-        cur.execute('INSERT INTO object_metadata (bucket, object, metadata) '
-                    'VALUES (%s, %s, %s) '
-                    'ON CONFLICT (bucket, object) '
-                    'DO UPDATE SET metadata = EXCLUDED.metadata',
-                    (bucket_name, object_name, json.dumps(data)))
-
-    pg_connection.commit()
+    with pg_connector.connect() as pg_connection:
+        with pg_connection.cursor() as cur:
+            cur.execute('INSERT INTO object_metadata (bucket, object, metadata) '
+                        'VALUES (%s, %s, %s) '
+                        'ON CONFLICT (bucket, object) '
+                        'DO UPDATE SET metadata = EXCLUDED.metadata',
+                        (bucket_name, object_name, json.dumps(data)))
 
 
 def get_object_metadata(key):
@@ -299,13 +314,14 @@ def get_object_metadata(key):
     """
     bucket_name = key.bucket.name
     object_name = key.name
-    with pg_connection.cursor() as cur:
-        cur.execute('SELECT metadata FROM object_metadata '
-                    'WHERE bucket = %s AND object = %s',
-                    (bucket_name, object_name))
-        result = cur.fetchone()
+    with pg_connector.connect() as pg_connection:
+        with pg_connection.cursor() as cur:
+            cur.execute('SELECT metadata FROM object_metadata '
+                        'WHERE bucket = %s AND object = %s',
+                        (bucket_name, object_name))
+            result = cur.fetchone()
 
-    pg_connection.rollback()
+        pg_connection.rollback()
 
     if result is None:
         return {}
@@ -321,9 +337,8 @@ def delete_object_metadata(key):
     """
     bucket_name = key.bucket.name
     object_name = key.name
-    with pg_connection.cursor() as cur:
-        cur.execute('DELETE FROM object_metadata '
-                    'WHERE bucket = %s AND object = %s',
-                    (bucket_name, object_name))
-
-    pg_connection.commit()
+    with pg_connector.connect() as pg_connection:
+        with pg_connection.cursor() as cur:
+            cur.execute('DELETE FROM object_metadata '
+                        'WHERE bucket = %s AND object = %s',
+                        (bucket_name, object_name))

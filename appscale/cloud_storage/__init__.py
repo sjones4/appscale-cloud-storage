@@ -27,7 +27,7 @@ utils.admin_connection = S3Connection(
     port=app.config['S3_PORT'],
     calling_format=OrdinaryCallingFormat()
 )
-utils.pg_connection = psycopg2.connect(**app.config['POSTGRES_DB'])
+utils.pg_connector = utils.PostgresConnector(**app.config['POSTGRES_DB'])
 utils.config = app.config
 
 
