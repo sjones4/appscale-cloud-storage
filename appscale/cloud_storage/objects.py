@@ -396,3 +396,31 @@ def resumable_insert(bucket_name, upload_id, conn):
                      for start, end in completed_ranges]
     response.headers['Range'] = 'bytes=' + ','.join(range_strings)
     return response
+
+
+@authenticate
+@assert_unsupported('destinationPredefinedAcl', 'ifGenerationMatch',
+                    'ifGenerationNotMatch', 'ifMetagenerationMatch',
+                    'ifMetagenerationNotMatch', 'ifSourceGenerationMatch',
+                    'ifSourceGenerationNotMatch',
+                    'ifSourceMetagenerationMatch',
+                    'ifSourceMetagenerationNotMatch', 'sourceGeneration')
+def copy_object(bucket_name, object_name, dest_bucket_name, dest_object_name,
+                conn):
+    """ Copies an object.
+
+    Args:
+        bucket_name: A string specifying the source bucket name.
+        object_name: A string specifying the source object name.
+        dest_bucket_name: A string specifying the destination bucket name.
+        dest_object_name: A string specifying the destination object name.
+        conn: An S3Connection instance.
+    Returns:
+        A JSON string representing an object.
+    """
+    dest_bucket = conn.get_bucket(dest_bucket_name)
+    dest_key = dest_bucket.copy_key(dest_object_name, bucket_name, object_name)
+    dest_key = dest_bucket.get_key(dest_key.name)  # retrieve metadata for key
+    dest_obj = object_info(
+        dest_key, last_modified=datetime.datetime.now(datetime.timezone.utc))
+    return Response(json.dumps(dest_obj), mimetype='application/json')
