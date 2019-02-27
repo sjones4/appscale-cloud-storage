@@ -14,7 +14,7 @@ from .utils import error
 
 
 @authenticate
-def batch(conn):
+def batch(conn, **kwargs):
     """ Handle request batch.
 
     Args:

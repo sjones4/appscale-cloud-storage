@@ -32,35 +32,48 @@ utils.config = app.config
 
 # Request batching
 app.add_url_rule('/batch/storage/v1',
-                 view_func=batches.batch, methods=['POST'])
+                 view_func=batches.batch, methods=['POST'],
+                 subdomain='<subdomain>')
 app.add_url_rule('/null',  # dataflow client does not configure batch path
-                 view_func=batches.batch, methods=['POST'])
+                 view_func=batches.batch, methods=['POST'],
+                 subdomain='<subdomain>')
 
 # Buckets
 app.add_url_rule('/storage/v1/b',
-                 view_func=buckets.list_buckets, methods=['GET'])
+                 view_func=buckets.list_buckets, methods=['GET'],
+                 subdomain='<subdomain>')
 app.add_url_rule('/storage/v1/b',
-                 view_func=buckets.insert_bucket, methods=['POST'])
+                 view_func=buckets.insert_bucket, methods=['POST'],
+                 subdomain='<subdomain>')
 app.add_url_rule('/storage/v1/b/<bucket_name>',
-                 view_func=buckets.get_bucket, methods=['GET'])
+                 view_func=buckets.get_bucket, methods=['GET'],
+                 subdomain='<subdomain>')
 app.add_url_rule('/storage/v1/b/<bucket_name>',
-                 view_func=buckets.delete_bucket, methods=['DELETE'])
+                 view_func=buckets.delete_bucket, methods=['DELETE'],
+                 subdomain='<subdomain>')
 
 # Objects
 app.add_url_rule('/storage/v1/b/<bucket_name>/o',
-                 view_func=objects.list_objects, methods=['GET'])
+                 view_func=objects.list_objects, methods=['GET'],
+                 subdomain='<subdomain>')
 app.add_url_rule('/storage/v1/b/<bucket_name>/o/<path:object_name>',
-                 view_func=objects.get_object, methods=['GET'])
+                 view_func=objects.get_object, methods=['GET'],
+                 subdomain='<subdomain>')
 app.add_url_rule('/storage/v1/b/<bucket_name>/o/<path:object_name>',
-                 view_func=objects.delete_object, methods=['DELETE'])
+                 view_func=objects.delete_object, methods=['DELETE'],
+                 subdomain='<subdomain>')
 app.add_url_rule('/upload/storage/v1/b/<bucket_name>/o',
-                 view_func=objects.insert_object, methods=['POST'])
+                 view_func=objects.insert_object, methods=['POST'],
+                 subdomain='<subdomain>')
 app.add_url_rule('/upload/storage/v1/b/<bucket_name>/o',
-                 view_func=objects.resumable_insert, methods=['PUT'])
+                 view_func=objects.resumable_insert, methods=['PUT'],
+                 subdomain='<subdomain>')
 app.add_url_rule('/storage/v1/b/<bucket_name>/o/<path:object_name>'
                  '/copyTo/b/<dest_bucket_name>/o/<path:dest_object_name>',
-                 view_func=objects.copy_object, methods=['POST'])
+                 view_func=objects.copy_object, methods=['POST'],
+                 subdomain='<subdomain>')
 
 # Access Tokens
 app.add_url_rule('/o/oauth2/token',
-                 view_func=oauth.get_token, methods=['POST'])
+                 view_func=oauth.get_token, methods=['POST'],
+                 subdomain='<subdomain>')

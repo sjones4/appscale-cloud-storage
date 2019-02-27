@@ -37,11 +37,12 @@ from .utils import get_request_from_state
 from .utils import get_upload_state
 from .utils import set_object_metadata
 from .utils import upsert_upload_state
+from .utils import url_strip_host
 from .utils import UploadNotFound
 from .utils import UploadStates
 
 
-def object_info(key, last_modified=None):
+def object_info(key, last_modified=None, **kwargs):
     """ Generates a dictionary representing a GCS object.
 
     Args:
@@ -58,17 +59,18 @@ def object_info(key, last_modified=None):
     last_mod_usec = int((last_modified - EPOCH).total_seconds() * 1000000)
     key_id = '/'.join([key.bucket.name, key.name, str(last_mod_usec)])
     object_url = url_for('get_object', bucket_name=key.bucket.name,
-                         object_name=key.name)
+                         object_name=key.name, **kwargs)
+    object_path = url_strip_host(object_url)
 
     obj = {
         'kind': 'storage#object',
         'id': key_id,
-        'selfLink': request.url_root[:-1] + object_url,
+        'selfLink': request.url_root + object_path,
         'name': key.name,
         'bucket': key.bucket.name,
         'generation': str(last_mod_usec),
         'etag': key.etag[1:-1],
-        'mediaLink': request.url_root[:-1] + object_url + '?alt=media',
+        'mediaLink': request.url_root + object_path + '?alt=media',
         'size': str(key.size)
     }
 
@@ -103,7 +105,7 @@ def read_object(key, chunk_size):
 
 
 @authenticate
-def list_objects(bucket_name, conn):
+def list_objects(bucket_name, conn, **kwargs):
     """ Retrieves a list of objects.
 
     Args:
@@ -125,12 +127,12 @@ def list_objects(bucket_name, conn):
     if not keys:
         return Response(json.dumps(response), mimetype='application/json')
 
-    response['items'] = [object_info(key) for key in keys]
+    response['items'] = [object_info(key, **kwargs) for key in keys]
     return Response(json.dumps(response), mimetype='application/json')
 
 
 @authenticate
-def delete_object(bucket_name, object_name, conn):
+def delete_object(bucket_name, object_name, conn, **kwargs):
     """ Deletes an object and its metadata.
 
     Args:
@@ -158,7 +160,7 @@ def delete_object(bucket_name, object_name, conn):
 @authenticate
 @assert_unsupported('generation', 'ifGenerationMatch', 'ifGenerationNotMatch',
                     'ifMetagenerationMatch', 'ifMetagenerationNotMatch')
-def get_object(bucket_name, object_name, conn):
+def get_object(bucket_name, object_name, conn, **kwargs):
     """ Retrieves an object or its metadata.
 
     Args:
@@ -218,13 +220,13 @@ def get_object(bucket_name, object_name, conn):
         response.headers['Content-Type'] = key.content_type
         return response
 
-    obj = object_info(key)
+    obj = object_info(key, **kwargs)
     return Response(json.dumps(obj), mimetype='application/json')
 
 
 @authenticate
 @assert_required('uploadType')
-def insert_object(bucket_name, upload_type, conn):
+def insert_object(bucket_name, upload_type, conn, **kwargs):
     """ Stores an object or starts a resumable upload.
 
     Args:
@@ -255,7 +257,7 @@ def insert_object(bucket_name, upload_type, conn):
         key = Key(bucket, object_name)
         key.set_contents_from_string(content)
         obj = object_info(
-            key, last_modified=datetime.datetime.now(datetime.timezone.utc))
+            key, last_modified=datetime.datetime.now(datetime.timezone.utc), **kwargs)
         return Response(json.dumps(obj), mimetype='application/json')
     if upload_type == 'resumable' and upload_id is None:
         if object_name is None:
@@ -270,8 +272,8 @@ def insert_object(bucket_name, upload_type, conn):
         state = {'object': object_name, 'status': UploadStates.NEW}
         upsert_upload_state(new_upload_id, state)
 
-        upload_url = url_for('insert_object', bucket_name=bucket_name)
-        redirect = request.url_root[:-1] + upload_url + \
+        upload_url = url_for('insert_object', bucket_name=bucket_name, **kwargs)
+        redirect = request.url_root + url_strip_host(upload_url) + \
                    '?uploadType=resumable&upload_id={}'.format(new_upload_id)
         response = Response('')
         response.headers['Location'] = redirect
@@ -295,8 +297,9 @@ def insert_object(bucket_name, upload_type, conn):
         if 'contentType' in metadata:
             key.set_metadata('Content-Type', metadata['contentType'])
         key.set_contents_from_string(file_data)
-        obj = object_info(
-            key, last_modified=datetime.datetime.now(datetime.timezone.utc))
+        obj = object_info(key,
+                          last_modified=datetime.datetime.now(datetime.timezone.utc),
+                          **kwargs)
         return Response(json.dumps(obj), mimetype='application/json')
 
     return error('Invalid uploadType.', HTTP_BAD_REQUEST)
@@ -304,7 +307,7 @@ def insert_object(bucket_name, upload_type, conn):
 
 @authenticate
 @assert_required('upload_id')
-def resumable_insert(bucket_name, upload_id, conn):
+def resumable_insert(bucket_name, upload_id, conn, **kwargs):
     """ Stores all or part of an object.
 
     Args:
@@ -334,7 +337,7 @@ def resumable_insert(bucket_name, upload_id, conn):
     bucket = conn.get_bucket(bucket_name)
     if current_portion == '*':
         if upload_state['status'] == UploadStates.COMPLETE:
-            obj = object_info(bucket.get_key(object_name))
+            obj = object_info(bucket.get_key(object_name), **kwargs)
             return Response(json.dumps(obj), mimetype='application/json')
         upload_request = get_request_from_state(
             upload_id, upload_state, bucket)
@@ -388,7 +391,7 @@ def resumable_insert(bucket_name, upload_id, conn):
 
         key.md5 = binascii.hexlify(md5)
         set_object_metadata(key, {'md5Hash': base64.b64encode(md5).decode()})
-        return Response(json.dumps(object_info(key)),
+        return Response(json.dumps(object_info(key, **kwargs)),
                         mimetype='application/json')
 
     response = Response('', status=HTTP_RESUME_INCOMPLETE)
@@ -406,7 +409,7 @@ def resumable_insert(bucket_name, upload_id, conn):
                     'ifSourceMetagenerationMatch',
                     'ifSourceMetagenerationNotMatch', 'sourceGeneration')
 def copy_object(bucket_name, object_name, dest_bucket_name, dest_object_name,
-                conn):
+                conn, **kwargs):
     """ Copies an object.
 
     Args:
@@ -422,5 +425,7 @@ def copy_object(bucket_name, object_name, dest_bucket_name, dest_object_name,
     dest_key = dest_bucket.copy_key(dest_object_name, bucket_name, object_name)
     dest_key = dest_bucket.get_key(dest_key.name)  # retrieve metadata for key
     dest_obj = object_info(
-        dest_key, last_modified=datetime.datetime.now(datetime.timezone.utc))
+        dest_key,
+        last_modified=datetime.datetime.now(datetime.timezone.utc),
+        **kwargs)
     return Response(json.dumps(dest_obj), mimetype='application/json')

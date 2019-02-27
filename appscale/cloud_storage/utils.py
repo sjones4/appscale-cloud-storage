@@ -70,6 +70,22 @@ def camel_to_snake(name):
     return re.sub('([a-z])([A-Z])', r'\1_\2', name).lower()
 
 
+def url_strip_host(url):
+    """ Removes the scheme, host and port from http[s] urls.
+
+    For example:
+      https://host:80/path/goes/here -> path/goes/here
+
+    Args:
+        url: A relative or absolute url
+    Returns:
+        The url with any host prefix removed.
+    """
+    return (url[url.find('/',8)+1:]
+            if url.startswith('http://') or url.startswith('https://')
+            else url)
+
+
 def error(message, code=HTTP_ERROR):
     """ A convenience function for formatting error messages.
 

@@ -14,12 +14,13 @@ from .decorators import authenticate
 from .utils import error
 from .utils import index_bucket
 from .utils import query_buckets
+from .utils import url_strip_host
 
 
 @authenticate
 @assert_unsupported('prefix')
 @assert_required('project')
-def list_buckets(project, conn):
+def list_buckets(project, conn, **kwargs):
     """ Retrieves a list of buckets for the given project.
 
     Args:
@@ -63,11 +64,12 @@ def list_buckets(project, conn):
 
     items = []
     for bucket in buckets:
-        bucket_url = url_for('get_bucket', bucket_name=bucket.name)
+        bucket_url = url_for('get_bucket', bucket_name=bucket.name,
+                             **kwargs)
         items.append({
             'kind': 'storage#bucket',
             'id': bucket.name,
-            'selfLink': request.url_root[:-1] + bucket_url,
+            'selfLink': request.url_root + url_strip_host(bucket_url),
             'name': bucket.name,
             'timeCreated': bucket.creation_date
         })
@@ -80,7 +82,7 @@ def list_buckets(project, conn):
 @assert_unsupported('predefinedAcl', 'predefinedDefaultObjectAcl',
                     'projection')
 @assert_required('project')
-def insert_bucket(project, conn):
+def insert_bucket(project, conn, **kwargs):
     """ Creates a new bucket.
 
     Args:
@@ -107,11 +109,12 @@ def insert_bucket(project, conn):
     except StopIteration:
         return error('Unable to find bucket after creating it.')
 
-    bucket_url = url_for('get_bucket', bucket_name=bucket.name)
+    bucket_url = url_for('get_bucket', bucket_name=bucket.name,
+                         **kwargs)
     response = {
         'kind': 'storage#bucket',
         'id': bucket.name,
-        'selfLink': request.url_root[:-1] + bucket_url,
+        'selfLink': request.url_root + url_strip_host(bucket_url),
         'name': bucket.name,
         'timeCreated': bucket.creation_date,
         'updated': bucket.creation_date
@@ -122,7 +125,7 @@ def insert_bucket(project, conn):
 @authenticate
 @assert_unsupported('ifMetagenerationMatch', 'ifMetagenerationNotMatch',
                     'fields')
-def get_bucket(bucket_name, conn):
+def get_bucket(bucket_name, conn, **kwargs):
     """ Returns metadata for the specified bucket.
 
     Args:
@@ -142,11 +145,12 @@ def get_bucket(bucket_name, conn):
     except StopIteration:
         return error('Not Found', HTTP_NOT_FOUND)
 
-    bucket_url = url_for('get_bucket', bucket_name=bucket.name)
+    bucket_url = url_for('get_bucket', bucket_name=bucket.name,
+                         **kwargs)
     response = {
         'kind': 'storage#bucket',
         'id': bucket.name,
-        'selfLink': request.url_root[:-1] + bucket_url,
+        'selfLink': request.url_root + url_strip_host(bucket_url),
         'name': bucket.name,
         'timeCreated': bucket.creation_date,
         'updated': bucket.creation_date
@@ -156,7 +160,7 @@ def get_bucket(bucket_name, conn):
 
 @authenticate
 @assert_unsupported('ifMetagenerationMatch', 'ifMetagenerationNotMatch')
-def delete_bucket(bucket_name, conn):
+def delete_bucket(bucket_name, conn, **kwargs):
     """ Deletes an empty bucket.
 
     Args:
