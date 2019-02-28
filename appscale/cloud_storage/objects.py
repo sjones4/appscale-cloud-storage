@@ -197,10 +197,11 @@ def get_object(bucket_name, object_name, conn, **kwargs):
         response_range = None
         status_code = HTTP_OK
         if 'Range' in request.headers:
-            boto_headers = {'Range': request.headers['Range']}
             requested_range = request.headers['Range'].split('=')[-1]
-            start_byte, end_byte = (int(val) for val
+            boto_headers = {'Range': request.headers['Range']}
+            start_byte, end_byte = (int(val) if val else -1 for val
                                     in requested_range.split('-'))
+            end_byte = key.size-1 if end_byte < 0 else end_byte
             requested_length = end_byte - start_byte + 1
             remaining_length = key.size - start_byte
             content_length = min(remaining_length, requested_length)
