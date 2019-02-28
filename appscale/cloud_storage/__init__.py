@@ -59,6 +59,9 @@ app.add_url_rule('/storage/v1/b/<bucket_name>/o',
 app.add_url_rule('/storage/v1/b/<bucket_name>/o/<path:object_name>',
                  view_func=objects.get_object, methods=['GET'],
                  subdomain='<subdomain>')
+app.add_url_rule('/download/storage/v1/b/<bucket_name>/o/<path:object_name>',
+                 view_func=objects.get_object, methods=['GET'],
+                 subdomain='<subdomain>')
 app.add_url_rule('/storage/v1/b/<bucket_name>/o/<path:object_name>',
                  view_func=objects.delete_object, methods=['DELETE'],
                  subdomain='<subdomain>')
