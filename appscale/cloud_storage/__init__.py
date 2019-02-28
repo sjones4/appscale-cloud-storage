@@ -3,6 +3,7 @@
 from boto.s3.connection import OrdinaryCallingFormat
 from boto.s3.connection import S3Connection
 from flask import Flask
+from werkzeug.contrib.fixers import ProxyFix
 from appscale.cloud_storage import batches
 from appscale.cloud_storage import buckets
 from appscale.cloud_storage import oauth
@@ -11,12 +12,11 @@ from appscale.cloud_storage import utils
 
 app = Flask(__name__)
 app.config.from_object('appscale.cloud_storage.config')
-
 try:
     app.config.from_envvar('APPSCALE_CLOUD_STORAGE_SETTINGS')
 except RuntimeError:
     app.logger.info('No custom settings specified.')
-
+app.wsgi_app = ProxyFix(app.wsgi_app)
 
 utils.admin_connection = S3Connection(
     aws_access_key_id=app.config['S3_ADMIN_CREDS']['access_key'],
