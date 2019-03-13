@@ -1,9 +1,11 @@
 import datetime
+import email
 import hashlib
 import itertools
 import json
 import psycopg2
 import re
+import time
 
 from boto.s3.multipart import MultiPartUpload
 from flask import Response
@@ -300,6 +302,30 @@ def calculate_md5(key):
             break
         md5_hash.update(object_data)
     return md5_hash.digest()
+
+
+def rfc3339_format(datetime_value, datestr):
+    """ Get an RFC 3339 format date.
+
+    Args:
+        datetime_value: A datetime object. If None datestr is used.
+        datestr: Text date in HTTP format (RFC 1123/2822)
+    Returns:
+        A formatted date or None if not available.
+    """
+    if not datetime_value:
+        if not datestr:
+            return None
+        datetime_tuple = email.utils.parsedate(datestr)
+        if datetime_tuple:
+            timestamp = time.mktime(datetime_tuple)
+            datetime_value = datetime.datetime.fromtimestamp(timestamp)
+
+    if not datetime_value:
+        return None
+
+    datetime_value = datetime_value.replace(tzinfo=datetime.timezone.utc)
+    return datetime_value.isoformat()
 
 
 def set_object_metadata(key, data):

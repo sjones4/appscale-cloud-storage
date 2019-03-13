@@ -35,6 +35,7 @@ from .utils import get_completed_ranges
 from .utils import get_object_metadata
 from .utils import get_request_from_state
 from .utils import get_upload_state
+from .utils import rfc3339_format
 from .utils import set_object_metadata
 from .utils import upsert_upload_state
 from .utils import url_strip_host
@@ -69,9 +70,11 @@ def object_info(key, last_modified=None, **kwargs):
         'name': key.name,
         'bucket': key.bucket.name,
         'generation': str(last_mod_usec),
+        'metageneration': str(last_mod_usec),
         'etag': key.etag[1:-1],
         'mediaLink': request.url_root + object_path + '?alt=media',
-        'size': str(key.size)
+        'size': str(key.size),
+        'updated': rfc3339_format(last_modified, key.last_modified)
     }
 
     # Multipart uploads do not have MD5 metadata by default.
