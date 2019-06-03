@@ -16,7 +16,7 @@ setup(
         'boto',
         'flask',
         'oauth2client',
-        'psycopg2',
+        'psycopg2-binary',
         'python-dateutil'
     ],
     entry_points={'console_scripts': [
