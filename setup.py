@@ -20,6 +20,7 @@ setup(
         'python-dateutil'
     ],
     entry_points={'console_scripts': [
-        'appscale-prime-cloud-storage=appscale.cloud_storage.prime:prime']
-    }
+        'appscale-cloud-storage-prime=appscale.cloud_storage.prime:prime',
+        'appscale-cloud-storage-link=appscale.cloud_storage.link:link'
+    ] }
 )

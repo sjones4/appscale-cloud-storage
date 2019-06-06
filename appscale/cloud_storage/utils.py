@@ -110,7 +110,8 @@ def index_bucket(bucket_name, project):
     """
     with pg_connector.connect() as pg_connection:
         with pg_connection.cursor() as cur:
-            cur.execute('INSERT INTO buckets (project, bucket) VALUES (%s, %s)',
+            cur.execute('INSERT INTO buckets (project, bucket) VALUES (%s, %s)'
+                        ' ON CONFLICT DO NOTHING',
                         (project, bucket_name))
 
 
