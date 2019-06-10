@@ -1,5 +1,5 @@
 import datetime
-import email
+import dateutil.parser
 import hashlib
 import itertools
 import json
@@ -99,6 +99,59 @@ def error(message, code=HTTP_ERROR):
     """
     response = json.dumps({'error': {'message': message, 'code': code}})
     return Response(response, mimetype='application/json', status=code)
+
+
+def xml_error(code, message, details='', http_code=HTTP_ERROR):
+    """ A convenience function for formatting XML error messages.
+
+    Args:
+        code: A string describing the error code.
+        message: A string containing the error message.
+        details: Additional details about the error.
+        http_code: An integer containing an HTTP status code.
+    Returns:
+        A Flask response specifying the error.
+    """
+    error = {'Code': code, 'Message': message}
+    if details:
+        error['Details'] = details
+    return Response(object_as_xml(error, 'Error'), mimetype='application/xml', status=http_code)
+
+
+def object_as_xml(object, element, namespace=None):
+    """ Utility function for converting a dict to an xml string.
+
+    Args:
+        object: The dict to be converted to xml.
+        element: The name of the xml document element.
+        namespace: Optional default namespace for the document.
+    Returns:
+        A textual representation of the object as xml.
+    """
+    om = ETree.Element(element)
+    if namespace:
+        om.set('xmlns', namespace)
+    _object_as_om(om, object)
+    return ETree.tostring(om, encoding='utf8')
+
+
+def _object_as_om(om, object):
+    """ Internals for object to model conversion"""
+    for key in object:
+        value = object.get(key)
+        if isinstance(value, dict):
+            sub_element = ETree.SubElement(om, key)
+            _object_as_om(sub_element, value)
+        elif isinstance(value, list):
+            for sub_value in value:
+                sub_element = ETree.SubElement(om, key)
+                if isinstance(sub_value, dict):
+                    _object_as_om(sub_element, sub_value)
+                else:
+                    sub_element.text = str(sub_value)
+        else:
+            sub_element = ETree.SubElement(om, key)
+            sub_element.text = str(value)
 
 
 def index_bucket(bucket_name, project):

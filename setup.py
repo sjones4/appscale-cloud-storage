@@ -11,7 +11,8 @@ setup(
         'Programming Language :: Python :: 3'
     ],
     keywords='appscale cloud storage gcs',
-    packages=['appscale', 'appscale.cloud_storage'],
+    packages=['appscale', 'appscale.cloud_storage',
+              'appscale.cloud_storage.xml'],
     install_requires=[
         'boto',
         'flask',
