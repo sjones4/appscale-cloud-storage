@@ -276,8 +276,9 @@ def insert_object(bucket_name, upload_type, conn, **kwargs):
         state = {'object': object_name, 'status': UploadStates.NEW}
         upsert_upload_state(new_upload_id, state)
 
-        upload_url = url_for('insert_object', bucket_name=bucket_name,  _external=False, **kwargs)
-        redirect = request.url_root[:-1] + url_strip_host(upload_url) + \
+        upload_url = url_for('insert_object', bucket_name=bucket_name,
+                             _external=False, **kwargs)
+        redirect = request.url_root + url_strip_host(upload_url) + \
                    '?uploadType=resumable&upload_id={}'.format(new_upload_id)
         response = Response('')
         response.headers['Location'] = redirect
@@ -395,7 +396,7 @@ def resumable_insert(bucket_name, upload_id, conn, **kwargs):
 
         key.md5 = binascii.hexlify(md5)
         set_object_metadata(key, {'md5Hash': base64.b64encode(md5).decode()})
-        return Response(json.dumps(object_info(key), **kwargs),
+        return Response(json.dumps(object_info(key, **kwargs)),
                         mimetype='application/json')
 
     response = Response('', status=HTTP_RESUME_INCOMPLETE)

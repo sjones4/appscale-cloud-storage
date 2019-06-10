@@ -64,7 +64,8 @@ def list_buckets(project, conn, **kwargs):
 
     items = []
     for bucket in buckets:
-        bucket_url = url_for('get_bucket', bucket_name=bucket.name, _external=False, **kwargs)
+        bucket_url = url_for('get_bucket', bucket_name=bucket.name,
+                             _external=False, **kwargs)
         items.append({
             'kind': 'storage#bucket',
             'id': bucket.name,
@@ -108,7 +109,8 @@ def insert_bucket(project, conn, **kwargs):
     except StopIteration:
         return error('Unable to find bucket after creating it.')
 
-    bucket_url = url_for('get_bucket', bucket_name=bucket.name, _external=False, **kwargs)
+    bucket_url = url_for('get_bucket', bucket_name=bucket.name,
+                         _external=False, **kwargs)
     response = {
         'kind': 'storage#bucket',
         'id': bucket.name,
@@ -143,7 +145,8 @@ def get_bucket(bucket_name, conn, **kwargs):
     except StopIteration:
         return error('Not Found', HTTP_NOT_FOUND)
 
-    bucket_url = url_for('get_bucket', bucket_name=bucket.name, _external=False, **kwargs)
+    bucket_url = url_for('get_bucket', bucket_name=bucket.name,
+                         _external=False, **kwargs)
     response = {
         'kind': 'storage#bucket',
         'id': bucket.name,
