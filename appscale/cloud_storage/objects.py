@@ -390,7 +390,6 @@ def resumable_insert(bucket_name, upload_id, conn, **kwargs):
         key = bucket.get_key(object_name)
         md5 = calculate_md5(key)
 
-        # TODO: Clean up old upload state info after a week.
         new_state = {'status': UploadStates.COMPLETE, 'object': object_name}
         upsert_upload_state(upload_id, new_state)
 

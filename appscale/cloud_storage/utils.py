@@ -194,7 +194,6 @@ def set_token(token, user_id, expiration):
         user_id: A string containing the user ID.
         expiration: A datetime object specifying the token expiration.
     """
-    # TODO: Clean up expired tokens.
     with pg_connector.connect() as pg_connection:
         with pg_connection.cursor() as cur:
             cur.execute('INSERT INTO tokens (token, user_id, expiration) '
@@ -442,3 +441,26 @@ def delete_object_metadata(key):
             cur.execute('DELETE FROM object_metadata '
                         'WHERE bucket = %s AND object = %s',
                         (bucket_name, object_name))
+
+
+def clean_tokens():
+    """ Clean up expired token metadata
+
+    """
+    with pg_connector.connect() as pg_connection:
+        with pg_connection.cursor() as cur:
+            cur.execute('DELETE FROM tokens WHERE '
+                        'expiration < CURRENT_TIMESTAMP')
+            return cur.rowcount
+
+
+def clean_uploads():
+    """ Clean up expired token metadata
+
+    """
+    with pg_connector.connect() as pg_connection:
+        with pg_connection.cursor() as cur:
+            cur.execute('DELETE FROM uploads WHERE '
+                        'created < (CURRENT_TIMESTAMP - INTERVAL %s)',
+                        (datetime.timedelta(7),))
+            return cur.rowcount

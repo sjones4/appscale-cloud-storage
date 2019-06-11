@@ -22,6 +22,7 @@ setup(
     ],
     entry_points={'console_scripts': [
         'appscale-cloud-storage-prime=appscale.cloud_storage.prime:prime',
-        'appscale-cloud-storage-link=appscale.cloud_storage.link:link'
+        'appscale-cloud-storage-link=appscale.cloud_storage.link:link',
+        'appscale-cloud-storage-clean=appscale.cloud_storage.clean:clean'
     ] }
 )

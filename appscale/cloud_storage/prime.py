@@ -11,6 +11,7 @@ def prime():
             CREATE TABLE IF NOT EXISTS buckets (
                 project text,
                 bucket text,
+                created timestamp with time zone default current_timestamp,
                 PRIMARY KEY (project, bucket)
             );
             """)
@@ -18,14 +19,16 @@ def prime():
             cur.execute("""
             CREATE TABLE IF NOT EXISTS tokens (
                 token text PRIMARY KEY,
+                created timestamp with time zone default current_timestamp,
                 user_id text,
-                expiration timestamp
+                expiration timestamp with time zone
             );
             """)
 
             cur.execute("""
             CREATE TABLE IF NOT EXISTS uploads (
                 id text PRIMARY KEY,
+                created timestamp with time zone default current_timestamp,
                 state text
             );
             """)
@@ -34,6 +37,7 @@ def prime():
             CREATE TABLE IF NOT EXISTS object_metadata (
                 bucket text,
                 object text,
+                created timestamp with time zone default current_timestamp,
                 metadata text,
                 PRIMARY KEY (bucket, object)
             );

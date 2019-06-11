@@ -154,7 +154,6 @@ def remove_object(conn, bucket_name, object_name, **kwargs):
 def post_object(conn, bucket_name, object_name, **kwargs):
     current_app.logger.debug('headers: {}'.format(request.headers))
 
-    # TODO: Handle Content-Type header.
     if request.headers['x-goog-resumable'] == 'start':
         new_upload_id = ''.join(
             random.choice(current_app.config['RESUMABLE_ID_CHARS'])
@@ -330,7 +329,6 @@ def put_object(conn, bucket_name, object_name, **kwargs):
         key = bucket.get_key(object_name)
         md5 = calculate_md5(key)
 
-        # TODO: Clean up old upload state info after a week.
         new_state = {'status': UploadStates.COMPLETE, 'object': object_name}
         upsert_upload_state(upload_id, new_state)
 
