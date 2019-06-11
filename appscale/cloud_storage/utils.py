@@ -328,8 +328,12 @@ def get_request_from_state(upload_id, upload_state, bucket):
         bucket: A boto Bucket object.
     """
     if upload_state['status'] == UploadStates.NEW:
+        metadata=None
+        if 'content-type' in upload_state:
+            metadata = {'Content-Type': upload_state['content-type']}
         upload_request = bucket.initiate_multipart_upload(
-            upload_state['object'])
+            upload_state['object'],
+            metadata=metadata)
         new_state = {'status': UploadStates.IN_PROGRESS,
                      'object': upload_state['object'],
                      'id': upload_request.id}

@@ -162,6 +162,8 @@ def post_object(conn, bucket_name, object_name, **kwargs):
         current_app.logger.debug('new upload_id: {}, object: {}'.format(
             new_upload_id, object_name))
         state = {'object': object_name, 'status': UploadStates.NEW}
+        if 'Content-Type' in request.headers:
+            state['content-type'] = request.headers['Content-Type']
         upsert_upload_state(new_upload_id, state)
 
         redirect = request.url_root + '{bucket}/{object}?upload_id={id}'.\
@@ -211,11 +213,14 @@ def put_object(conn, bucket_name, object_name, **kwargs):
 
     upload_id = request.args.get('upload_id', None)
     if upload_id is None:
+        headers = None
+        if 'Content-Type' in request.headers:
+            headers = {'Content-Type': request.headers['Content-Type']}
         content = request.data
 
         bucket = conn.get_bucket(bucket_name)
         key = Key(bucket, object_name)
-        key.set_contents_from_string(content)
+        key.set_contents_from_string(content, headers=headers)
         response = Response('')
         response.headers['ETag'] = key.etag
         return response
@@ -262,6 +267,9 @@ def put_object(conn, bucket_name, object_name, **kwargs):
                 upsert_upload_state(upload_id, new_state)
 
                 key.md5 = binascii.hexlify(md5)
+                if 'content-type' in upload_state:
+                    metadata = {'Content-Type': upload_state['content-type']}
+                    key.copy(bucket_name, object_name, metadata=metadata)
                 set_object_metadata(key, {
                     'md5Hash': base64.b64encode(md5).decode()})
                 return ''
@@ -327,6 +335,9 @@ def put_object(conn, bucket_name, object_name, **kwargs):
         upsert_upload_state(upload_id, new_state)
 
         key.md5 = binascii.hexlify(md5)
+        if 'content-type' in upload_state:
+            metadata = {'Content-Type': upload_state['content-type']}
+            key.copy(bucket_name, object_name, metadata=metadata)
         set_object_metadata(key, {'md5Hash': base64.b64encode(md5).decode()})
         # TODO: Check what GAE returns.
         return ''
