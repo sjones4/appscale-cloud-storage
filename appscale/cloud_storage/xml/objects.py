@@ -18,7 +18,7 @@ from ..constants import HTTP_NOT_IMPLEMENTED
 from ..constants import HTTP_NO_CONTENT
 from ..constants import HTTP_RANGE_NOT_SATISFIABLE
 from ..constants import HTTP_RESUME_INCOMPLETE
-from ..objects import read_object
+from ..objects import (read_object, get_default_acl)
 from ..utils import UploadNotFound
 from ..utils import UploadStates
 from ..utils import calculate_md5
@@ -248,7 +248,7 @@ def put_object(conn, bucket_name, object_name, **kwargs):
             # TODO: Check what GAE returns.
             return ''
         upload_request = get_request_from_state(
-            upload_id, upload_state, bucket)
+            upload_id, upload_state, bucket, policy=get_default_acl())
 
         if total_length != '*':
             try:
@@ -306,7 +306,8 @@ def put_object(conn, bucket_name, object_name, **kwargs):
             'Content-Range start must be a multiple of {}'.format(chunk_size))
     chunk_start = int(chunk_start)
 
-    upload_request = get_request_from_state(upload_id, upload_state, bucket)
+    upload_request = get_request_from_state(upload_id, upload_state, bucket,
+                                            policy=get_default_acl())
 
     for chunk_num in range(chunk_start, chunk_start + request_chunks):
         offset = chunk_size * (chunk_num - 1)
@@ -335,7 +336,8 @@ def put_object(conn, bucket_name, object_name, **kwargs):
         key.md5 = binascii.hexlify(md5)
         if 'content-type' in upload_state:
             metadata = {'Content-Type': upload_state['content-type']}
-            key.copy(bucket_name, object_name, metadata=metadata)
+            key.copy(bucket_name, object_name, metadata=metadata,
+                     preserve_acl=True)
         set_object_metadata(key, {'md5Hash': base64.b64encode(md5).decode()})
         # TODO: Check what GAE returns.
         return ''

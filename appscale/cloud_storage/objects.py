@@ -43,6 +43,14 @@ from .utils import UploadNotFound
 from .utils import UploadStates
 
 
+ACL_DEFAULT='bucket-owner-full-control'
+
+
+def get_default_acl():
+    """ Get the default canned acl for use with objects """
+    return ACL_DEFAULT
+
+
 def object_info(key, last_modified=None, **kwargs):
     """ Generates a dictionary representing a GCS object.
 
@@ -259,7 +267,7 @@ def insert_object(bucket_name, upload_type, conn, **kwargs):
             content = request.data
 
         key = Key(bucket, object_name)
-        key.set_contents_from_string(content)
+        key.set_contents_from_string(content, policy=ACL_DEFAULT)
         obj = object_info(
             key, last_modified=datetime.datetime.now(datetime.timezone.utc), **kwargs)
         return Response(json.dumps(obj), mimetype='application/json')
@@ -301,7 +309,7 @@ def insert_object(bucket_name, upload_type, conn, **kwargs):
         key = Key(bucket, object_name)
         if 'contentType' in metadata:
             key.set_metadata('Content-Type', metadata['contentType'])
-        key.set_contents_from_string(file_data)
+        key.set_contents_from_string(file_data, policy=ACL_DEFAULT)
         obj = object_info(key,
                           last_modified=datetime.datetime.now(datetime.timezone.utc),
                           **kwargs)
@@ -345,7 +353,7 @@ def resumable_insert(bucket_name, upload_id, conn, **kwargs):
             obj = object_info(bucket.get_key(object_name), **kwargs)
             return Response(json.dumps(obj), mimetype='application/json')
         upload_request = get_request_from_state(
-            upload_id, upload_state, bucket)
+            upload_id, upload_state, bucket, policy=ACL_DEFAULT)
         response = Response('', status=HTTP_RESUME_INCOMPLETE)
         range_strings = ['{}-{}'.format(start, end) for start, end
                          in get_completed_ranges(upload_request)]
@@ -371,7 +379,8 @@ def resumable_insert(bucket_name, upload_id, conn, **kwargs):
             'Content-Range start must be a multiple of {}'.format(chunk_size))
     chunk_start = int(chunk_start)
 
-    upload_request = get_request_from_state(upload_id, upload_state, bucket)
+    upload_request = get_request_from_state(upload_id, upload_state, bucket,
+                                            policy=ACL_DEFAULT)
 
     for chunk_num in range(chunk_start, chunk_start + request_chunks):
         offset = chunk_size * (chunk_num - 1)

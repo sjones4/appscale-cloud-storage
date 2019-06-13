@@ -20,6 +20,8 @@ except RuntimeError:
     app.logger.info('No custom settings specified.')
 app.wsgi_app = ProxyFix(app.wsgi_app)
 
+objects.ACL_DEFAULT = app.config.get('S3_OBJECT_ACL', objects.ACL_DEFAULT)
+
 utils.admin_connection = S3Connection(
     aws_access_key_id=app.config['S3_ADMIN_CREDS']['access_key'],
     aws_secret_access_key=app.config['S3_ADMIN_CREDS']['secret_key'],

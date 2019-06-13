@@ -318,13 +318,14 @@ def completed_bytes(completed_ranges):
     return sum([end - start + 1 for start, end in completed_ranges])
 
 
-def get_request_from_state(upload_id, upload_state, bucket):
+def get_request_from_state(upload_id, upload_state, bucket, policy=None):
     """ Fetches or creates a MultiPartUpload object for an upload ID.
 
     Args:
         upload_id: A string specifying the upload ID.
         upload_state: A dictionary containing upload state.
         bucket: A boto Bucket object.
+        policy: Policy to use if initiating upload
     """
     if upload_state['status'] == UploadStates.NEW:
         metadata=None
@@ -332,7 +333,8 @@ def get_request_from_state(upload_id, upload_state, bucket):
             metadata = {'Content-Type': upload_state['content-type']}
         upload_request = bucket.initiate_multipart_upload(
             upload_state['object'],
-            metadata=metadata)
+            metadata=metadata,
+            policy=policy)
         new_state = {'status': UploadStates.IN_PROGRESS,
                      'object': upload_state['object'],
                      'id': upload_request.id}
