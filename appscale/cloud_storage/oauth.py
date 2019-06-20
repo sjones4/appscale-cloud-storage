@@ -51,8 +51,9 @@ def get_token(**kwargs):
                     for _ in range(config['ACCESS_TOKEN_LENGTH']))
     current_app.logger.debug('new token: {}'.format(token))
 
-    expiration = datetime.timedelta(seconds=config['TOKEN_EXPIRATION'])
-    set_token(token, user, expiration=datetime.datetime.now() + expiration)
+    expiration_td = datetime.timedelta(seconds=config['TOKEN_EXPIRATION'])
+    expiration = datetime.datetime.now(datetime.timezone.utc) + expiration_td
+    set_token(token, user, expiration=expiration)
 
     response = {
         'access_token': token,

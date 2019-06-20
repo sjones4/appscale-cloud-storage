@@ -212,7 +212,8 @@ def get_user(token):
     """
     # Check if the token is already cached.
     if token in active_tokens:
-        if datetime.datetime.now() <= active_tokens[token]['expiration']:
+        if (datetime.datetime.now(datetime.timezone.utc) <=
+                active_tokens[token]['expiration']):
             return active_tokens[token]['user']
         raise TokenExpired('Token expired.')
 
@@ -229,7 +230,7 @@ def get_user(token):
         raise TokenNotFound('Token not found.')
 
     user, expiration = result
-    if datetime.datetime.now() > expiration:
+    if datetime.datetime.now(datetime.timezone.utc) > expiration:
         raise TokenExpired('Token expired.')
 
     active_tokens[token] = {'user': user, 'expiration': expiration}
