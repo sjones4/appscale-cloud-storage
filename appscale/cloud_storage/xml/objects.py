@@ -53,6 +53,9 @@ def list_objects(conn, bucket_name, **kwargs):
     Returns:
         An XML string representing an object listing.
     """
+    delimiter = request.args.get('delimiter', default='')
+    marker = request.args.get('marker', default='')
+    prefix = request.args.get('prefix', default='')
     try:
         bucket = conn.get_bucket(bucket_name)
     except S3ResponseError as s3_error:
@@ -61,7 +64,9 @@ def list_objects(conn, bucket_name, **kwargs):
         raise s3_error
 
     response = {'Name': bucket_name, 'IsTruncated': 'false'}
-    response['Contents'] = [key_as_content(key) for key in bucket.list()]
+    response['Contents'] = [key_as_content(key) for key in filter(
+        lambda k: isinstance(k, Key),
+        bucket.list(prefix=prefix, delimiter=delimiter, marker=marker))]
 
     return Response(object_as_xml(response, 'ListBucketResult', RESPONSE_NS), mimetype='application/xml')
 
