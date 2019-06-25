@@ -9,6 +9,7 @@ import time
 
 from boto.s3.multipart import MultiPartUpload
 from flask import Response
+from xml.etree import ElementTree as ETree
 from .constants import HTTP_ERROR
 
 # A cache used to store valid access tokens.
