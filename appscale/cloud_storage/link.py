@@ -4,6 +4,7 @@ import argparse
 
 from .utils import index_bucket
 
+
 def link():
     """ Link a bucket to a project, typically you would link a bucket to one
         project. """

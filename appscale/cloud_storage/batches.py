@@ -133,4 +133,4 @@ def _deserialize_request(payload):
     headers_body = payload.split('\r\n\r\n', 1)
     body = headers_body[1] if 1 < len(headers_body) else None
 
-    return (method, path, Headers(msg.items()), body)
+    return method, path, Headers(msg.items()), body

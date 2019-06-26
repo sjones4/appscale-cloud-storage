@@ -15,7 +15,7 @@ def create_bucket(conn, bucket_name, **kwargs):
     """ Creates a new bucket.
 
     Args:
-        project: A string specifying a project ID.
+        bucket_name: A string specifying a bucket name.
         conn: An S3Connection instance.
     Returns:
         An empty or error response

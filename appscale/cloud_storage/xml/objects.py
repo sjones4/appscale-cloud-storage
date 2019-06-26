@@ -63,10 +63,12 @@ def list_objects(conn, bucket_name, **kwargs):
             return xml_error('NoSuchBucket', 'The specified bucket does not exist.', HTTP_NOT_FOUND)
         raise s3_error
 
-    response = {'Name': bucket_name, 'IsTruncated': 'false'}
-    response['Contents'] = [key_as_content(key) for key in filter(
-        lambda k: isinstance(k, Key),
-        bucket.list(prefix=prefix, delimiter=delimiter, marker=marker))]
+    response = {
+        'Name': bucket_name,
+        'IsTruncated': 'false',
+        'Contents': [key_as_content(key) for key in filter(
+            lambda k: isinstance(k, Key),
+            bucket.list(prefix=prefix, delimiter=delimiter, marker=marker))]}
 
     return Response(object_as_xml(response, 'ListBucketResult', RESPONSE_NS), mimetype='application/xml')
 
@@ -116,7 +118,7 @@ def download_object(conn, bucket_name, object_name, **kwargs):
     response.headers['Last-Modified'] = key.last_modified
     response.headers['x-goog-stored-content-length'] = key.size
     if 'Content-Length' in headers:
-      response.headers['Content-Length'] = headers['Content-Length']
+        response.headers['Content-Length'] = headers['Content-Length']
 
     # Multipart uploads do not have MD5 metadata by default.
     if key.md5 is not None:
@@ -135,6 +137,7 @@ def remove_object(conn, bucket_name, object_name, **kwargs):
     """ Deletes an object and its metadata.
 
     Args:
+        conn: An S3Connection instance.
         bucket_name: A string specifying a bucket name.
         object_name: A string specifying an object name.
     """
@@ -328,7 +331,7 @@ def put_object(conn, bucket_name, object_name, **kwargs):
 
     completed_ranges = get_completed_ranges(upload_request)
     if (total_length is not None and
-                completed_bytes(completed_ranges) == total_length):
+            completed_bytes(completed_ranges) == total_length):
         # Ideally, the MD5 would be calculated before the request is finalized,
         # but there doesn't seem to be a way to fetch part data beforehand.
         upload_request.complete_upload()

@@ -43,7 +43,7 @@ from .utils import UploadNotFound
 from .utils import UploadStates
 
 
-ACL_DEFAULT='bucket-owner-full-control'
+ACL_DEFAULT = 'bucket-owner-full-control'
 
 
 def get_default_acl():
@@ -243,7 +243,7 @@ def insert_object(bucket_name, upload_type, conn, **kwargs):
 
     Args:
         bucket_name: A string specifying a bucket name.
-        object_name: A string specifying an object name.
+        upload_type: A string specifying the upload type.
         conn: An S3Connection instance.
     Returns:
         A JSON string representing an object.
@@ -286,8 +286,9 @@ def insert_object(bucket_name, upload_type, conn, **kwargs):
 
         upload_url = url_for('insert_object', bucket_name=bucket_name,
                              _external=False, **kwargs)
-        redirect = request.url_root + url_strip_host(upload_url) + \
-                   '?uploadType=resumable&upload_id={}'.format(new_upload_id)
+        redirect = ''.join([
+            request.url_root, url_strip_host(upload_url),
+            '?uploadType=resumable&upload_id={}'.format(new_upload_id)])
         response = Response('')
         response.headers['Location'] = redirect
         return response
@@ -325,7 +326,7 @@ def resumable_insert(bucket_name, upload_id, conn, **kwargs):
 
     Args:
         bucket_name: A string specifying a bucket name.
-        object_name: A string specifying an object name.
+        upload_id: A string specifying the upload identifier.
         conn: An S3Connection instance.
     Returns:
         A JSON string representing an object.

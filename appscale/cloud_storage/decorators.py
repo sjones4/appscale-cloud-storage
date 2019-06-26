@@ -23,8 +23,8 @@ def assert_required(*required):
     Returns:
         The given function called with the parameters as keyword arguments.
     """
-    def wrapper(function):
-        @functools.wraps(function)
+    def wrapper(func):
+        @functools.wraps(func)
         def wrapped_function(*args, **kwargs):
             undefined = [param for param in required
                          if request.args.get(param) is None]
@@ -34,7 +34,7 @@ def assert_required(*required):
             # Convert the parameter key to snake case and pass it in.
             kwargs.update({camel_to_snake(param): request.args.get(param)
                            for param in required})
-            return function(*args, **kwargs)
+            return func(*args, **kwargs)
         return wrapped_function
     return wrapper
 
@@ -45,26 +45,26 @@ def assert_unsupported(*unsupported):
     Args:
         Any number of strings specifying unsupported parameters.
     """
-    def wrapper(function):
-        @functools.wraps(function)
+    def wrapper(func):
+        @functools.wraps(func)
         def wrapped_function(*args, **kwargs):
             defined = [param for param in unsupported
                        if request.args.get(param) is not None]
             if defined:
                 return error('{} not supported'.format(defined),
                              HTTP_NOT_IMPLEMENTED)
-            return function(*args, **kwargs)
+            return func(*args, **kwargs)
         return wrapped_function
     return wrapper
 
 
-def authenticate(function):
+def authenticate(func):
     """ A decorator that authenticates a request and provides a connection.
 
     Args:
-        function: Any function that requires authentication.
+        func: Any function that requires authentication.
     """
-    @functools.wraps(function)
+    @functools.wraps(func)
     def decorated_function(*args, **kwargs):
         try:
             _, token = request.headers['Authorization'].split()
@@ -94,5 +94,5 @@ def authenticate(function):
 
         kwargs['conn'] = s3_connection_cache[user]
 
-        return function(*args, **kwargs)
+        return func(*args, **kwargs)
     return decorated_function

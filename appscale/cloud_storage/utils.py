@@ -1,5 +1,5 @@
 import datetime
-import dateutil.parser
+import email
 import hashlib
 import itertools
 import json
@@ -84,7 +84,7 @@ def url_strip_host(url):
     Returns:
         The url with any host prefix removed.
     """
-    return (url[url.find('/',8)+1:]
+    return (url[url.find('/', 8)+1:]
             if url.startswith('http://') or url.startswith('https://')
             else url)
 
@@ -113,17 +113,17 @@ def xml_error(code, message, details='', http_code=HTTP_ERROR):
     Returns:
         A Flask response specifying the error.
     """
-    error = {'Code': code, 'Message': message}
+    error_info = {'Code': code, 'Message': message}
     if details:
-        error['Details'] = details
-    return Response(object_as_xml(error, 'Error'), mimetype='application/xml', status=http_code)
+        error_info['Details'] = details
+    return Response(object_as_xml(error_info, 'Error'), mimetype='application/xml', status=http_code)
 
 
-def object_as_xml(object, element, namespace=None):
+def object_as_xml(object_dict, element, namespace=None):
     """ Utility function for converting a dict to an xml string.
 
     Args:
-        object: The dict to be converted to xml.
+        object_dict: The dict to be converted to xml.
         element: The name of the xml document element.
         namespace: Optional default namespace for the document.
     Returns:
@@ -132,14 +132,13 @@ def object_as_xml(object, element, namespace=None):
     om = ETree.Element(element)
     if namespace:
         om.set('xmlns', namespace)
-    _object_as_om(om, object)
+    _object_as_om(om, object_dict)
     return ETree.tostring(om, encoding='utf8')
 
 
-def _object_as_om(om, object):
+def _object_as_om(om, object_dict):
     """ Internals for object to model conversion"""
-    for key in object:
-        value = object.get(key)
+    for key, value in object_dict.items():
         if isinstance(value, dict):
             sub_element = ETree.SubElement(om, key)
             _object_as_om(sub_element, value)
@@ -330,7 +329,7 @@ def get_request_from_state(upload_id, upload_state, bucket, policy=None):
         policy: Policy to use if initiating upload
     """
     if upload_state['status'] == UploadStates.NEW:
-        metadata=None
+        metadata = None
         if 'content-type' in upload_state:
             metadata = {'Content-Type': upload_state['content-type']}
         upload_request = bucket.initiate_multipart_upload(

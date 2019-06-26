@@ -22,17 +22,17 @@ def get_connection():
 
 
 # TODO authentication...
-def authenticate_xml(function):
+def authenticate_xml(func):
     """ A decorator that authenticates a request and provides a connection.
 
     Args:
-        function: Any function that requires authentication.
+        func: Any function that requires authentication.
     """
 
-    @functools.wraps(function)
+    @functools.wraps(func)
     def decorated_function(*args, **kwargs):
         kwargs['conn'] = get_connection()
 
-        return function(*args, **kwargs)
+        return func(*args, **kwargs)
 
     return decorated_function
