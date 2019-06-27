@@ -1,5 +1,5 @@
 import datetime
-import email
+import email.utils as email_utils
 import hashlib
 import itertools
 import json
@@ -7,22 +7,34 @@ import psycopg2
 import re
 import time
 
-from boto.s3.multipart import MultiPartUpload
+from boto.s3.bucket import Bucket
+from boto.s3.connection import S3Connection
+from boto.s3.key import Key
+from boto.s3.multipart import MultiPartUpload, Part
 from flask import Response
+from psycopg2.extensions import connection
+from typing import (cast, Any, Dict, Iterable, List, NamedTuple, Optional, Set,
+                    Tuple, Union)
 from xml.etree import ElementTree as ETree
+
 from .constants import HTTP_ERROR
 
 # A cache used to store valid access tokens.
-active_tokens = {}
+active_tokens: Dict[str, 'Token'] = {}
 
 # A cache used to store active S3 connections.
-s3_connection_cache = {}
+s3_connection_cache: Dict[str, S3Connection] = {}
 
 # A PostgresConnector
-pg_connector = None
+pg_connector: 'PostgresConnector'
 
 # This configuration is defined when the app starts.
-config = None
+config: Dict[str, Any]
+
+# Types
+ObjectMetadata = Dict[str, str]
+Ranges = Tuple[Tuple[int, int], ...]
+UploadState = Dict[str, str]
 
 
 class TokenExpired(Exception):
@@ -47,22 +59,27 @@ class UploadStates(object):
     COMPLETE = 'complete'
 
 
+class Token(NamedTuple):
+    user: str
+    expiration: datetime.datetime
+
+
 class PostgresConnector(object):
     """ Connection helper for postgresql"""
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         self._args = args
         self._kwargs = kwargs
-        self._connection = None
+        self._connection: connection = None
 
-    def connect(self):
+    def connect(self) -> connection:
         self._connection = psycopg2.connect(*self._args, **self._kwargs)
         return self._connection
 
-    def close(self):
-        return self._connection.close()
+    def close(self) -> None:
+        self._connection.close()
 
 
-def camel_to_snake(name):
+def camel_to_snake(name: str) -> str:
     """ Converts a string from camelCase to snake_case.
 
     Args:
@@ -73,7 +90,7 @@ def camel_to_snake(name):
     return re.sub('([a-z])([A-Z])', r'\1_\2', name).lower()
 
 
-def url_strip_host(url):
+def url_strip_host(url: str) -> str:
     """ Removes the scheme, host and port from http[s] urls.
 
     For example:
@@ -89,20 +106,22 @@ def url_strip_host(url):
             else url)
 
 
-def error(message, code=HTTP_ERROR):
-    """ A convenience function for formatting error messages.
+def error(message: str, code: int=HTTP_ERROR) -> Response:
+    """ A convenience function for error responses.
 
     Args:
         message: A string containing the error message.
         code: An integer containing an HTTP status code.
     Returns:
-        A JSON string specifying the error.
+        A response with a JSON body specifying the error.
     """
     response = json.dumps({'error': {'message': message, 'code': code}})
     return Response(response, mimetype='application/json', status=code)
 
 
-def xml_error(code, message, details='', http_code=HTTP_ERROR):
+def xml_error(code: str, message: str,
+              details: Optional[Union[str, Dict[str, str]]]='',
+              http_code: int=HTTP_ERROR) -> Response:
     """ A convenience function for formatting XML error messages.
 
     Args:
@@ -113,13 +132,13 @@ def xml_error(code, message, details='', http_code=HTTP_ERROR):
     Returns:
         A Flask response specifying the error.
     """
-    error_info = {'Code': code, 'Message': message}
+    error_info: Dict[str, Any] = {'Code': code, 'Message': message}
     if details:
         error_info['Details'] = details
     return Response(object_as_xml(error_info, 'Error'), mimetype='application/xml', status=http_code)
 
 
-def object_as_xml(object_dict, element, namespace=None):
+def object_as_xml(object_dict: Dict[str, Any], element: str, namespace: Optional[str]=None) -> str:
     """ Utility function for converting a dict to an xml string.
 
     Args:
@@ -136,7 +155,7 @@ def object_as_xml(object_dict, element, namespace=None):
     return ETree.tostring(om, encoding='utf8')
 
 
-def _object_as_om(om, object_dict):
+def _object_as_om(om: ETree.Element, object_dict: Dict[str, Any]) -> None:
     """ Internals for object to model conversion"""
     for key, value in object_dict.items():
         if isinstance(value, dict):
@@ -154,7 +173,7 @@ def _object_as_om(om, object_dict):
             sub_element.text = str(value)
 
 
-def index_bucket(bucket_name, project):
+def index_bucket(bucket_name: str, project: str) -> None:
     """ Associates a bucket with a project.
 
     Args:
@@ -168,7 +187,7 @@ def index_bucket(bucket_name, project):
                         (project, bucket_name))
 
 
-def query_buckets(project):
+def query_buckets(project: str) -> Set[str]:
     """ Fetches a set of bucket names in a given project.
 
     Args:
@@ -186,7 +205,7 @@ def query_buckets(project):
     return buckets
 
 
-def set_token(token, user_id, expiration):
+def set_token(token: str, user_id: str, expiration: datetime.datetime) -> None:
     """ Defines a valid token.
 
     Args:
@@ -201,7 +220,7 @@ def set_token(token, user_id, expiration):
                         (token, user_id, expiration))
 
 
-def get_user(token):
+def get_user(token: str) -> str:
     """ Retrieves a user dictionary from a given token.
 
     Args:
@@ -213,8 +232,8 @@ def get_user(token):
     # Check if the token is already cached.
     if token in active_tokens:
         if (datetime.datetime.now(datetime.timezone.utc) <=
-                active_tokens[token]['expiration']):
-            return active_tokens[token]['user']
+                active_tokens[token].expiration):
+            return active_tokens[token].user
         raise TokenExpired('Token expired.')
 
     # Try to fetch the token from Postgres.
@@ -233,11 +252,11 @@ def get_user(token):
     if datetime.datetime.now(datetime.timezone.utc) > expiration:
         raise TokenExpired('Token expired.')
 
-    active_tokens[token] = {'user': user, 'expiration': expiration}
-    return active_tokens[token]['user']
+    active_tokens[token] = Token(user, expiration)
+    return active_tokens[token].user
 
 
-def upsert_upload_state(upload_id, state):
+def upsert_upload_state(upload_id: str, state: UploadState) -> None:
     """ Stores or updates state for a given upload ID.
 
     Args:
@@ -259,7 +278,7 @@ def upsert_upload_state(upload_id, state):
                         (upload_id, json.dumps(new_state)))
 
 
-def get_upload_state(upload_id):
+def get_upload_state(upload_id: str) -> UploadState:
     """ Fetches state for a given upload ID.
 
     Args:
@@ -280,7 +299,7 @@ def get_upload_state(upload_id):
     return json.loads(result[0])
 
 
-def get_completed_ranges(upload_request):
+def get_completed_ranges(upload_request: MultiPartUpload) -> Ranges:
     """ Fetches list of tuples specifying completed ranges for an upload.
 
     Args:
@@ -288,12 +307,14 @@ def get_completed_ranges(upload_request):
     Returns:
         A list of tuples specifying completed byte ranges.
     """
-    def drift(index_part):
+    def drift(index_part: Tuple[int, Part]):
         index, part = index_part
         return index - part.part_number
 
-    completed_ranges = []
-    for _, group in itertools.groupby(enumerate(upload_request), drift):
+    completed_ranges: List[Tuple[int, int]] = []
+    group: Any
+    for _, group in itertools.groupby(
+            enumerate(cast(Iterable, upload_request)), drift):
         group = list(group)
         first_part = group[0][1]
         part_size = first_part.size
@@ -304,10 +325,10 @@ def get_completed_ranges(upload_request):
         end_of_last_part = start_of_last_part + last_part.size - 1
 
         completed_ranges.append((start_of_range, end_of_last_part))
-    return completed_ranges
+    return tuple(completed_ranges)
 
 
-def completed_bytes(completed_ranges):
+def completed_bytes(completed_ranges: Ranges) -> int:
     """ Fetches the total number of bytes stored for an upload.
 
     Args:
@@ -319,7 +340,9 @@ def completed_bytes(completed_ranges):
     return sum([end - start + 1 for start, end in completed_ranges])
 
 
-def get_request_from_state(upload_id, upload_state, bucket, policy=None):
+def get_request_from_state(upload_id: str, upload_state: UploadState,
+                           bucket: Bucket, policy: Optional[str]=None
+                           ) -> MultiPartUpload:
     """ Fetches or creates a MultiPartUpload object for an upload ID.
 
     Args:
@@ -328,6 +351,7 @@ def get_request_from_state(upload_id, upload_state, bucket, policy=None):
         bucket: A boto Bucket object.
         policy: Policy to use if initiating upload
     """
+    upload_request: MultiPartUpload
     if upload_state['status'] == UploadStates.NEW:
         metadata = None
         if 'content-type' in upload_state:
@@ -347,7 +371,7 @@ def get_request_from_state(upload_id, upload_state, bucket, policy=None):
     return upload_request
 
 
-def calculate_md5(key):
+def calculate_md5(key: Key) -> bytes:
     """ Calculates an MD5 digest for an object.
 
     Args:
@@ -364,7 +388,7 @@ def calculate_md5(key):
     return md5_hash.digest()
 
 
-def rfc3339_format(datetime_value, datestr):
+def rfc3339_format(datetime_value: datetime.datetime, datestr: str) -> Optional[str]:
     """ Get an RFC 3339 format date.
 
     Args:
@@ -376,7 +400,7 @@ def rfc3339_format(datetime_value, datestr):
     if not datetime_value:
         if not datestr:
             return None
-        datetime_tuple = email.utils.parsedate(datestr)
+        datetime_tuple = email_utils.parsedate(datestr)
         if datetime_tuple:
             timestamp = time.mktime(datetime_tuple)
             datetime_value = datetime.datetime.fromtimestamp(timestamp)
@@ -388,7 +412,7 @@ def rfc3339_format(datetime_value, datestr):
     return datetime_value.isoformat()
 
 
-def set_object_metadata(key, data):
+def set_object_metadata(key: Key, data: ObjectMetadata) -> None:
     """ Updates object metadata.
 
     Args:
@@ -406,7 +430,7 @@ def set_object_metadata(key, data):
                         (bucket_name, object_name, json.dumps(data)))
 
 
-def get_object_metadata(key):
+def get_object_metadata(key: Key) -> ObjectMetadata:
     """ Fetches object metadata.
 
     Args:
@@ -431,7 +455,7 @@ def get_object_metadata(key):
     return json.loads(result[0])
 
 
-def delete_object_metadata(key):
+def delete_object_metadata(key: Key) -> None:
     """ Deletes an object's metadata.
 
     Args:
@@ -446,7 +470,7 @@ def delete_object_metadata(key):
                         (bucket_name, object_name))
 
 
-def clean_tokens():
+def clean_tokens() -> int:
     """ Clean up expired token metadata
 
     """
@@ -457,7 +481,7 @@ def clean_tokens():
             return cur.rowcount
 
 
-def clean_uploads():
+def clean_uploads() -> int:
     """ Clean up expired token metadata
 
     """

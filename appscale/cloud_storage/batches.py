@@ -1,4 +1,6 @@
+from boto.s3.connection import S3Connection
 from email.generator import Generator
+from email.message import Message
 from email.mime.multipart import MIMEMultipart
 from email.mime.nonmultipart import MIMENonMultipart
 from email.parser import FeedParser
@@ -6,6 +8,7 @@ from flask import current_app
 from flask import request
 from flask import Response
 from io import StringIO
+from typing import cast, List, Optional, Tuple
 from werkzeug.datastructures import Headers
 
 from .constants import HTTP_BAD_REQUEST
@@ -14,7 +17,7 @@ from .utils import error
 
 
 @authenticate
-def batch(conn, **kwargs):
+def batch(conn: S3Connection, **kwargs) -> Response:
     """ Handle request batch.
 
     Args:
@@ -29,13 +32,13 @@ def batch(conn, **kwargs):
     parser = FeedParser()
     parser.feed(header)
     parser.feed(request.get_data(as_text=True))
-    mime_request = parser.close()
+    mime_request: Message = parser.close()
 
     if not mime_request.is_multipart():
         return error('Invalid content type for batch request: {}'
                      .format(request.content_type), HTTP_BAD_REQUEST)
 
-    parts = mime_request.get_payload()
+    parts = cast(List[Message], mime_request.get_payload())
     for part in parts:
         if 'application/http' != part.get_content_type():
             return error('Invalid content type for batch part: {}'
@@ -45,8 +48,9 @@ def batch(conn, **kwargs):
     setattr(mime_response, '_write_headers', lambda self: None)
 
     for part in parts:
-        current_app.logger.debug('part payload: {}'.format(part.get_payload()))
-        method, path, headers, body = _deserialize_request(part.get_payload())
+        part_payload = cast(str, part.get_payload())
+        current_app.logger.debug('part payload: {}'.format(part_payload))
+        method, path, headers, body = _deserialize_request(part_payload)
         current_app.logger.debug('part method: {}'.format(method))
         current_app.logger.debug('part path: {}'.format(path))
         current_app.logger.debug('part headers: {}'.format(headers))
@@ -77,7 +81,7 @@ def batch(conn, **kwargs):
     return Response(mime_out.getvalue(), mimetype=mime_response['Content-Type'])
 
 
-def _serialize_response(response):
+def _serialize_response(response: Response) -> str:
     """Convert a Response object into a string.
 
     Args:
@@ -113,7 +117,7 @@ def _serialize_response(response):
     return status_line + headers_body
 
 
-def _deserialize_request(payload):
+def _deserialize_request(payload: str) -> Tuple[str, str, Headers, Optional[str]]:
     """Convert string to tuple of request parts
 
     Args:

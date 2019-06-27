@@ -14,7 +14,7 @@ from .utils import error
 from .utils import set_token
 
 
-def get_token(**kwargs):
+def get_token(**kwargs) -> Response:
     """ Creates an authentication token for valid service credentials.
 
     Returns:

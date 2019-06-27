@@ -5,7 +5,7 @@ import argparse
 from .utils import (clean_tokens, clean_uploads)
 
 
-def clean():
+def clean() -> None:
     """ Clean up expired metadata.
     """
 

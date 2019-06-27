@@ -9,13 +9,16 @@ import random
 import re
 
 from boto.exception import S3ResponseError
+from boto.s3.bucket import Bucket
+from boto.s3.connection import S3Connection
 from boto.s3.key import Key
-
 from flask import current_app
 from flask import request
 from flask import Response
 from flask import url_for
 from io import BytesIO
+from typing import (Any, Dict, Generator, Optional, Tuple, Union)
+
 from .constants import EPOCH
 from .constants import HTTP_BAD_REQUEST
 from .constants import HTTP_NO_CONTENT
@@ -46,12 +49,12 @@ from .utils import UploadStates
 ACL_DEFAULT = 'bucket-owner-full-control'
 
 
-def get_default_acl():
+def get_default_acl() -> str:
     """ Get the default canned acl for use with objects """
     return ACL_DEFAULT
 
 
-def object_info(key, last_modified=None, **kwargs):
+def object_info(key: Key, last_modified: Optional[datetime.datetime]=None, **kwargs) -> Dict[str, Any]:
     """ Generates a dictionary representing a GCS object.
 
     Args:
@@ -100,7 +103,7 @@ def object_info(key, last_modified=None, **kwargs):
     return obj
 
 
-def read_object(key, chunk_size):
+def read_object(key: Key, chunk_size: int) -> Generator[bytes, None, None]:
     """ A generator that fetches object data.
 
     Args:
@@ -116,7 +119,7 @@ def read_object(key, chunk_size):
 
 
 @authenticate
-def list_objects(bucket_name, conn, **kwargs):
+def list_objects(bucket_name: str, conn: S3Connection, **kwargs) -> Response:
     """ Retrieves a list of objects.
 
     Args:
@@ -126,7 +129,7 @@ def list_objects(bucket_name, conn, **kwargs):
         A JSON string representing an object.
     """
     # TODO: Get bucket ACL.
-    response = {'kind': 'storage#objects'}
+    response: Dict[str, Any] = {'kind': 'storage#objects'}
     try:
         bucket = conn.get_bucket(bucket_name)
     except S3ResponseError as s3_error:
@@ -143,7 +146,7 @@ def list_objects(bucket_name, conn, **kwargs):
 
 
 @authenticate
-def delete_object(bucket_name, object_name, conn, **kwargs):
+def delete_object(bucket_name: str, object_name: str, conn: S3Connection, **kwargs) -> Union[Tuple[str, int], Response]:
     """ Deletes an object and its metadata.
 
     Args:
@@ -171,7 +174,7 @@ def delete_object(bucket_name, object_name, conn, **kwargs):
 @authenticate
 @assert_unsupported('generation', 'ifGenerationMatch', 'ifGenerationNotMatch',
                     'ifMetagenerationMatch', 'ifMetagenerationNotMatch')
-def get_object(bucket_name, object_name, conn, **kwargs):
+def get_object(bucket_name: str, object_name: str, conn: S3Connection, **kwargs) -> Response:
     """ Retrieves an object or its metadata.
 
     Args:
@@ -181,23 +184,23 @@ def get_object(bucket_name, object_name, conn, **kwargs):
     Returns:
         A JSON string representing an object.
     """
-    projection = request.args.get('projection') or 'noAcl'
+    projection: str = request.args.get('projection') or 'noAcl'
     if projection != 'noAcl':
         return error('projection: {} not supported.'.format(projection),
                      HTTP_NOT_IMPLEMENTED)
 
-    alt = request.args.get('alt', default='json')
+    alt: str = request.args.get('alt', default='json')
     if alt not in ['json', 'media']:
         return error('alt: {} not supported.'.format(projection),
                      HTTP_BAD_REQUEST)
 
     try:
-        bucket = conn.get_bucket(bucket_name)
+        bucket: Bucket = conn.get_bucket(bucket_name)
     except S3ResponseError as s3_error:
         if s3_error.status == HTTP_NOT_FOUND:
             return error('Not Found', HTTP_NOT_FOUND)
         raise s3_error
-    key = bucket.get_key(object_name)
+    key: Key = bucket.get_key(object_name)
 
     if key is None:
         return error('Not Found', HTTP_NOT_FOUND)
@@ -238,7 +241,7 @@ def get_object(bucket_name, object_name, conn, **kwargs):
 
 @authenticate
 @assert_required('uploadType')
-def insert_object(bucket_name, upload_type, conn, **kwargs):
+def insert_object(bucket_name: str, upload_type: str, conn: S3Connection, **kwargs) -> Response:
     """ Stores an object or starts a resumable upload.
 
     Args:
@@ -248,9 +251,9 @@ def insert_object(bucket_name, upload_type, conn, **kwargs):
     Returns:
         A JSON string representing an object.
     """
-    bucket = conn.get_bucket(bucket_name)
-    object_name = request.args.get('name', default=None)
-    upload_id = request.args.get('upload_id', default=None)
+    bucket: Bucket = conn.get_bucket(bucket_name)
+    object_name: Optional[str] = request.args.get('name', default=None)
+    upload_id: Optional[str] = request.args.get('upload_id', default=None)
 
     if upload_type == 'media':
         if object_name is None:
@@ -321,7 +324,7 @@ def insert_object(bucket_name, upload_type, conn, **kwargs):
 
 @authenticate
 @assert_required('upload_id')
-def resumable_insert(bucket_name, upload_id, conn, **kwargs):
+def resumable_insert(bucket_name: str, upload_id: str, conn: S3Connection, **kwargs) -> Response:
     """ Stores all or part of an object.
 
     Args:
@@ -422,8 +425,8 @@ def resumable_insert(bucket_name, upload_id, conn, **kwargs):
                     'ifSourceGenerationNotMatch',
                     'ifSourceMetagenerationMatch',
                     'ifSourceMetagenerationNotMatch', 'sourceGeneration')
-def copy_object(bucket_name, object_name, dest_bucket_name, dest_object_name,
-                conn, **kwargs):
+def copy_object(bucket_name: str, object_name: str, dest_bucket_name: str, dest_object_name: str,
+                conn: S3Connection, **kwargs) -> Response:
     """ Copies an object.
 
     Args:

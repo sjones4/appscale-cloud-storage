@@ -3,7 +3,7 @@
 from appscale.cloud_storage.utils import pg_connector
 
 
-def prime():
+def prime() -> None:
     """ Populates the metadata backend with the required tables. """
     with pg_connector.connect() as pg_connection:
         with pg_connection.cursor() as cur:

@@ -3,12 +3,15 @@ import binascii
 import dateutil.parser
 import math
 import random
+
 from boto.exception import S3ResponseError
+from boto.s3.bucket import Bucket
+from boto.s3.connection import S3Connection
 from boto.s3.key import Key
-from flask import Response
-from flask import current_app
-from flask import request
+from datetime import datetime
+from flask import current_app, request, Response
 from io import BytesIO
+from typing import Any, Dict, Tuple, Union
 
 from .decorators import authenticate_xml
 from ..constants import HTTP_BAD_REQUEST
@@ -35,15 +38,15 @@ from ..utils import upsert_upload_state
 from ..utils import xml_error
 
 
-RESPONSE_NS = 'http://doc.s3.amazonaws.com/2006-03-01'
+RESPONSE_NS: str = 'http://doc.s3.amazonaws.com/2006-03-01'
 
 
-def key_as_content(key):
+def key_as_content(key: Key) -> Dict[str, Any]:
     return {'Key': key.name, 'LastModified': key.last_modified, 'ETag': key.etag, 'Size': key.size}
 
 
 @authenticate_xml
-def list_objects(conn, bucket_name, **kwargs):
+def list_objects(conn: S3Connection, bucket_name: str, **kwargs) -> Response:
     current_app.logger.debug('headers: {}'.format(request.headers))
     """ Retrieves a list of objects.
 
@@ -53,17 +56,19 @@ def list_objects(conn, bucket_name, **kwargs):
     Returns:
         An XML string representing an object listing.
     """
-    delimiter = request.args.get('delimiter', default='')
-    marker = request.args.get('marker', default='')
-    prefix = request.args.get('prefix', default='')
+    delimiter: str = request.args.get('delimiter', default='')
+    marker: str = request.args.get('marker', default='')
+    prefix: str = request.args.get('prefix', default='')
     try:
-        bucket = conn.get_bucket(bucket_name)
+        bucket: Bucket = conn.get_bucket(bucket_name)
     except S3ResponseError as s3_error:
         if s3_error.status == HTTP_NOT_FOUND:
-            return xml_error('NoSuchBucket', 'The specified bucket does not exist.', HTTP_NOT_FOUND)
+            return xml_error('NoSuchBucket',
+                             'The specified bucket does not exist.',
+                             http_code=HTTP_NOT_FOUND)
         raise s3_error
 
-    response = {
+    response: Dict[str, object] = {
         'Name': bucket_name,
         'IsTruncated': 'false',
         'Contents': [key_as_content(key) for key in filter(
@@ -74,7 +79,7 @@ def list_objects(conn, bucket_name, **kwargs):
 
 
 @authenticate_xml
-def download_object(conn, bucket_name, object_name, **kwargs):
+def download_object(conn: S3Connection, bucket_name: str, object_name: str, **kwargs) -> Response:
     current_app.logger.debug('headers: {}'.format(request.headers))
 
     unsupported_headers = ('If-Match', 'If-Modified-Since', 'If-None-Match',
@@ -89,13 +94,13 @@ def download_object(conn, bucket_name, object_name, **kwargs):
         boto_headers = {'Range': request.headers['Range']}
 
     try:
-        bucket = conn.get_bucket(bucket_name)
+        bucket: Bucket = conn.get_bucket(bucket_name)
     except S3ResponseError as s3_error:
         if s3_error.status == HTTP_NOT_FOUND:
             return error('Not Found', HTTP_NOT_FOUND)
         raise s3_error
 
-    key = bucket.get_key(object_name)
+    key: Key = bucket.get_key(object_name)
 
     if key is None:
         return error('Not Found', HTTP_NOT_FOUND)
@@ -111,9 +116,9 @@ def download_object(conn, bucket_name, object_name, **kwargs):
                 http_code=HTTP_RANGE_NOT_SATISFIABLE)
         raise s3_error
 
-    headers = dict(key.resp.getheaders())
+    headers: Dict[str, str] = dict(key.resp.getheaders())
     current_app.logger.debug('s3 inbound headers: {}'.format(headers))
-    response = Response(read_object(key, current_app.config['READ_SIZE']))
+    response: Response = Response(read_object(key, current_app.config['READ_SIZE']))
     response.headers['Content-Type'] = key.content_type
     response.headers['Last-Modified'] = key.last_modified
     response.headers['x-goog-stored-content-length'] = key.size
@@ -126,14 +131,14 @@ def download_object(conn, bucket_name, object_name, **kwargs):
     elif '-' not in key.etag:
         response.headers['ETag'] = '"{}"'.format(key.etag)
     else:
-        metadata = get_object_metadata(key)
-        md5 = binascii.hexlify(base64.b64decode(metadata['md5Hash']))
+        metadata: Dict[str, str] = get_object_metadata(key)
+        md5: bytes = binascii.hexlify(base64.b64decode(metadata['md5Hash']))
         response.headers['ETag'] = '"{}"'.format(md5.decode())
     return response
 
 
 @authenticate_xml
-def remove_object(conn, bucket_name, object_name, **kwargs):
+def remove_object(conn: S3Connection, bucket_name: str, object_name: str, **kwargs) -> Union[Tuple[str, int], Response]:
     """ Deletes an object and its metadata.
 
     Args:
@@ -142,14 +147,14 @@ def remove_object(conn, bucket_name, object_name, **kwargs):
         object_name: A string specifying an object name.
     """
     try:
-        bucket = conn.get_bucket(bucket_name)
+        bucket: Bucket = conn.get_bucket(bucket_name)
     except S3ResponseError as s3_error:
         if s3_error.status == HTTP_NOT_FOUND:
             return error('Not Found', HTTP_NOT_FOUND)
         raise s3_error
 
     # TODO: Do the following lookup and delete under a lock.
-    key = bucket.get_key(object_name)
+    key: Key = bucket.get_key(object_name)
     if key is None:
         return error('Not Found', HTTP_NOT_FOUND)
 
@@ -159,23 +164,23 @@ def remove_object(conn, bucket_name, object_name, **kwargs):
 
 
 @authenticate_xml
-def post_object(conn, bucket_name, object_name, **kwargs):
+def post_object(conn: S3Connection, bucket_name: str, object_name: str, **kwargs) -> Union[Tuple[str, int], Response]:
     current_app.logger.debug('headers: {}'.format(request.headers))
 
     if request.headers['x-goog-resumable'] == 'start':
-        new_upload_id = ''.join(
+        new_upload_id: str = ''.join(
             random.choice(current_app.config['RESUMABLE_ID_CHARS'])
             for _ in range(current_app.config['RESUMABLE_ID_LENGTH']))
         current_app.logger.debug('new upload_id: {}, object: {}'.format(
             new_upload_id, object_name))
-        state = {'object': object_name, 'status': UploadStates.NEW}
+        state: Dict[str, str] = {'object': object_name, 'status': UploadStates.NEW}
         if 'Content-Type' in request.headers:
             state['content-type'] = request.headers['Content-Type']
         upsert_upload_state(new_upload_id, state)
 
-        redirect = request.url_root + '{bucket}/{object}?upload_id={id}'.\
+        redirect: str = request.url_root + '{bucket}/{object}?upload_id={id}'.\
             format(bucket=bucket_name, object=object_name, id=new_upload_id)
-        response = Response('', status=HTTP_CREATED)
+        response: Response = Response('', status=HTTP_CREATED)
         response.headers['Location'] = redirect
         response.headers['X-GUploader-UploadID'] = new_upload_id
         del response.headers['Content-Type']
@@ -185,26 +190,27 @@ def post_object(conn, bucket_name, object_name, **kwargs):
 
 
 @authenticate_xml
-def put_object(conn, bucket_name, object_name, **kwargs):
+def put_object(conn: S3Connection, bucket_name: str, object_name: str, **kwargs) -> Union[str, Response]:
     current_app.logger.debug('headers: {}'.format(request.headers))
 
+    response: Response
     if 'X-Goog-Copy-Source' in request.headers:
-        source = request.headers['X-Goog-Copy-Source']
+        source: str = request.headers['X-Goog-Copy-Source']
         try:
-            src_bucket_name = source.split('/')[1]
-            src_object_name = '/'.join(source.split('/')[2:])
+            src_bucket_name: str = source.split('/')[1]
+            src_object_name: str = '/'.join(source.split('/')[2:])
         except IndexError:
             return error('Invalid source object.', HTTP_BAD_REQUEST)
 
-        src_bucket = conn.get_bucket(src_bucket_name)
-        src_key = src_bucket.get_key(src_object_name)
-        last_modified = dateutil.parser.parse(src_key.last_modified)
+        src_bucket: Bucket = conn.get_bucket(src_bucket_name)
+        src_key: Key = src_bucket.get_key(src_object_name)
+        last_modified: datetime = dateutil.parser.parse(src_key.last_modified)
 
-        dest_bucket = conn.get_bucket(bucket_name)
-        new_key = dest_bucket.copy_key(object_name, src_bucket_name,
-                                       src_object_name)
+        dest_bucket: Bucket = conn.get_bucket(bucket_name)
+        new_key: Key = dest_bucket.copy_key(object_name, src_bucket_name,
+                                            src_object_name)
 
-        response_xml = """
+        response_xml: str = """
         <?xml version='1.0' encoding='UTF-8'?>
         <CopyObjectResult>
           <LastModified>{last_mod}</LastModified>
@@ -218,12 +224,14 @@ def put_object(conn, bucket_name, object_name, **kwargs):
         response.headers['Content-Type'] = 'text/html'
         return response
 
-    upload_id = request.args.get('upload_id', None)
+    bucket: Bucket
+    key: Key
+    upload_id: str = request.args.get('upload_id', None)
     if upload_id is None:
         headers = None
         if 'Content-Type' in request.headers:
             headers = {'Content-Type': request.headers['Content-Type']}
-        content = request.data
+        content: bytes = request.data
 
         bucket = conn.get_bucket(bucket_name)
         key = Key(bucket, object_name)
@@ -233,11 +241,11 @@ def put_object(conn, bucket_name, object_name, **kwargs):
         return response
     else:
         try:
-            upload_state = get_upload_state(upload_id)
+            upload_state: Dict[str, str] = get_upload_state(upload_id)
         except UploadNotFound as state_error:
             return error(str(state_error), HTTP_BAD_REQUEST)
 
-    request_length = int(request.headers['Content-Length'])
+    request_length: int = int(request.headers['Content-Length'])
     if request_length < 1:
         return error('Content-Length must be greater than 0.',
                      HTTP_BAD_REQUEST)
@@ -251,6 +259,7 @@ def put_object(conn, bucket_name, object_name, **kwargs):
 
     current_portion, total_length = content_range.split('/')
     bucket = conn.get_bucket(bucket_name)
+    md5: bytes
     if current_portion == '*':
         if upload_state['status'] == UploadStates.COMPLETE:
             # TODO: Check what GAE returns.

@@ -4,6 +4,8 @@ from boto.s3.connection import OrdinaryCallingFormat
 from boto.s3.connection import S3Connection
 from flask import current_app
 from flask import request
+from typing import Callable
+
 from .constants import HTTP_BAD_REQUEST
 from .constants import HTTP_NOT_IMPLEMENTED
 from .constants import HTTP_UNAUTHORIZED
@@ -15,7 +17,7 @@ from .utils import TokenNotFound
 from .utils import TokenExpired
 
 
-def assert_required(*required):
+def assert_required(*required: str) -> Callable[[Callable], Callable]:
     """ A decorator that ensures required parameters are specified.
 
     Args:
@@ -23,7 +25,7 @@ def assert_required(*required):
     Returns:
         The given function called with the parameters as keyword arguments.
     """
-    def wrapper(func):
+    def wrapper(func: Callable):
         @functools.wraps(func)
         def wrapped_function(*args, **kwargs):
             undefined = [param for param in required
@@ -39,13 +41,13 @@ def assert_required(*required):
     return wrapper
 
 
-def assert_unsupported(*unsupported):
+def assert_unsupported(*unsupported: str) -> Callable[[Callable], Callable]:
     """ A decorator that ensures no unsupported parameters are defined.
 
     Args:
         Any number of strings specifying unsupported parameters.
     """
-    def wrapper(func):
+    def wrapper(func: Callable):
         @functools.wraps(func)
         def wrapped_function(*args, **kwargs):
             defined = [param for param in unsupported
@@ -58,7 +60,7 @@ def assert_unsupported(*unsupported):
     return wrapper
 
 
-def authenticate(func):
+def authenticate(func: Callable) -> Callable:
     """ A decorator that authenticates a request and provides a connection.
 
     Args:

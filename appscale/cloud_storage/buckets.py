@@ -1,9 +1,10 @@
 import json
 
 from boto.exception import S3ResponseError
-from flask import request
-from flask import Response
-from flask import url_for
+from boto.s3.connection import S3Connection
+from flask import request, url_for, Response
+from typing import Tuple, Union, Any, Dict
+
 from .constants import HTTP_CONFLICT
 from .constants import HTTP_NO_CONTENT
 from .constants import HTTP_NOT_FOUND
@@ -20,7 +21,7 @@ from .utils import url_strip_host
 @authenticate
 @assert_unsupported('prefix')
 @assert_required('project')
-def list_buckets(project, conn, **kwargs):
+def list_buckets(project: str, conn: S3Connection, **kwargs) -> Response:
     """ Retrieves a list of buckets for the given project.
 
     Args:
@@ -29,17 +30,17 @@ def list_buckets(project, conn, **kwargs):
     Returns:
         A JSON string representing a list of buckets.
     """
-    projection = request.args.get('projection', default='noAcl')
+    projection: str = request.args.get('projection', default='noAcl')
     if projection != 'noAcl':
         return error('projection: {} not supported.'.format(projection),
                      HTTP_NOT_IMPLEMENTED)
 
-    max_results = request.args.get('maxResults', type=int)
-    page_token = request.args.get('pageToken')
+    max_results: int = request.args.get('maxResults', type=int)
+    page_token: str = request.args.get('pageToken')
 
     index = query_buckets(project)
 
-    response = {'kind': 'storage#buckets'}
+    response: Dict[str, Any] = {'kind': 'storage#buckets'}
     buckets = tuple(bucket for bucket in conn.get_all_buckets()
                     if bucket.name in index)
     if not buckets:
@@ -82,7 +83,7 @@ def list_buckets(project, conn, **kwargs):
 @assert_unsupported('predefinedAcl', 'predefinedDefaultObjectAcl',
                     'projection')
 @assert_required('project')
-def insert_bucket(project, conn, **kwargs):
+def insert_bucket(project: str, conn: S3Connection, **kwargs) -> Response:
     """ Creates a new bucket.
 
     Args:
@@ -125,7 +126,7 @@ def insert_bucket(project, conn, **kwargs):
 @authenticate
 @assert_unsupported('ifMetagenerationMatch', 'ifMetagenerationNotMatch',
                     'fields')
-def get_bucket(bucket_name, conn, **kwargs):
+def get_bucket(bucket_name: str, conn: S3Connection, **kwargs) -> Response:
     """ Returns metadata for the specified bucket.
 
     Args:
@@ -160,7 +161,7 @@ def get_bucket(bucket_name, conn, **kwargs):
 
 @authenticate
 @assert_unsupported('ifMetagenerationMatch', 'ifMetagenerationNotMatch')
-def delete_bucket(bucket_name, conn, **kwargs):
+def delete_bucket(bucket_name: str, conn: S3Connection, **kwargs) -> Union[Response, Tuple[str, int]]:
     """ Deletes an empty bucket.
 
     Args:

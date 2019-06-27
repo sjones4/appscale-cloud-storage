@@ -1,14 +1,16 @@
 import functools
+
 from boto.s3.connection import OrdinaryCallingFormat
 from boto.s3.connection import S3Connection
 from flask import current_app
+from typing import Callable, Dict
 
 from ..utils import s3_connection_cache
 
 
-def get_connection():
-    user = 'appengine_user'
-    creds = current_app.config['S3_ADMIN_CREDS']
+def get_connection() -> S3Connection:
+    user: str = 'appengine_user'
+    creds: Dict[str, str] = current_app.config['S3_ADMIN_CREDS']
     if user not in s3_connection_cache:
         s3_connection_cache[user] = S3Connection(
             aws_access_key_id=creds['access_key'],
@@ -22,7 +24,7 @@ def get_connection():
 
 
 # TODO authentication...
-def authenticate_xml(func):
+def authenticate_xml(func: Callable) -> Callable:
     """ A decorator that authenticates a request and provides a connection.
 
     Args:

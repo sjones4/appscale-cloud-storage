@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 
-from boto.s3.connection import OrdinaryCallingFormat
-from boto.s3.connection import S3Connection
 from flask import Flask
 from werkzeug.middleware.proxy_fix import ProxyFix
 from appscale.cloud_storage import batches
@@ -22,14 +20,6 @@ app.wsgi_app = ProxyFix(app.wsgi_app)
 
 objects.ACL_DEFAULT = app.config.get('S3_OBJECT_ACL', objects.ACL_DEFAULT)
 
-utils.admin_connection = S3Connection(
-    aws_access_key_id=app.config['S3_ADMIN_CREDS']['access_key'],
-    aws_secret_access_key=app.config['S3_ADMIN_CREDS']['secret_key'],
-    is_secure=app.config['S3_USE_SSL'],
-    host=app.config['S3_HOST'],
-    port=app.config['S3_PORT'],
-    calling_format=OrdinaryCallingFormat()
-)
 utils.pg_connector = utils.PostgresConnector(**app.config['POSTGRES_DB'])
 utils.config = app.config
 

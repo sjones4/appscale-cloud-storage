@@ -1,6 +1,8 @@
 from boto.exception import S3ResponseError
-from flask import current_app
-from flask import request
+from boto.s3.bucket import Bucket
+from boto.s3.connection import S3Connection
+from flask import current_app, request, Response
+from typing import Tuple, Union
 
 from .decorators import authenticate_xml
 from ..buckets import index_bucket
@@ -11,7 +13,7 @@ from ..utils import xml_error
 
 
 @authenticate_xml
-def create_bucket(conn, bucket_name, **kwargs):
+def create_bucket(conn: S3Connection, bucket_name: str, **kwargs) -> Union[str, Response]:
     """ Creates a new bucket.
 
     Args:
@@ -26,7 +28,7 @@ def create_bucket(conn, bucket_name, **kwargs):
     if conn.lookup(bucket_name) is not None:
         return xml_error('BucketAlreadyExists', 'The requested bucket name is not available.', http_code=HTTP_CONFLICT)
 
-    project = request.headers['x-goog-project-id']
+    project: str = request.headers['x-goog-project-id']
     index_bucket(bucket_name, project)
 
     conn.create_bucket(bucket_name)
@@ -35,7 +37,7 @@ def create_bucket(conn, bucket_name, **kwargs):
 
 
 @authenticate_xml
-def delete_bucket(conn, bucket_name, **kwargs):
+def delete_bucket(conn: S3Connection, bucket_name: str, **kwargs) -> Union[Tuple[str, int], Response]:
     """ Deletes an empty bucket.
 
     Args:
@@ -44,7 +46,7 @@ def delete_bucket(conn, bucket_name, **kwargs):
     """
     current_app.logger.debug('headers: {}'.format(request.headers))
     try:
-        bucket = conn.get_bucket(bucket_name)
+        bucket: Bucket = conn.get_bucket(bucket_name)
     except S3ResponseError:
         return xml_error('NoSuchBucket', 'The specified bucket does not exist.', http_code=HTTP_NOT_FOUND)
 
